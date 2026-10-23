@@ -1,0 +1,12 @@
+build/
+.tmp/
+Makefile
+*.o
+moc_*.cpp
+moc_*.h
+qrc_*.cpp
+ui_*.h
+.qmake.stash
+*.pro.user
+*.autosave
+.vscode/
