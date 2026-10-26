@@ -46,7 +46,7 @@ make -j$(nproc)
 
 Windows 直接用 Qt Creator 打开 `VoiletXterm.pro`（Kit 选 Desktop Qt 5.15.2 MinGW 64-bit）即可编译。PATH 里需要有 OpenSSH 客户端（`ssh.exe`，Win10/11 默认自带）。
 
-Windows 上的 SSH 默认走**管道 + `ssh -tt`**：远端会分配伪终端，输出经管道回到界面。代价是**远端终端尺寸固定**（ssh 在没有本地 tty 时按 80×24 申请），拖动窗口不会重排。ConPTY 后端已经写好但默认关闭（`--conpty` 可试验），因为在实测中它没能把子进程的标准输出接到我们的管道上。
+Windows 上默认走 **ConPTY**（Windows 10 1809+）：真正的伪终端，窗口缩放会同步到远端。如果系统不支持 ConPTY，或它 2.5 秒内没有产生数据，会自动退回**管道 + `ssh -tt`** 方案（可用，但远端尺寸固定）。`--pipes` 可强制使用管道方案，`--conpty` 可强制 ConPTY。
 
 ## 使用
 
@@ -59,10 +59,12 @@ voiletxterm serial:/dev/ttyUSB0@115200
 
 | 快捷键 | 作用 |
 | --- | --- |
-| `Ctrl+N` | 新建 SSH 会话 |
-| `Ctrl+W` | 关闭当前标签 |
+| `Ctrl+Shift+N` | 新建 SSH 会话 |
+| `Ctrl+Shift+W` | 关闭当前标签 |
 | `Ctrl+Shift+C` / `Ctrl+Shift+V` | 复制 / 粘贴 |
 | `Ctrl++` / `Ctrl+-` / `Ctrl+0` | 放大 / 缩小 / 重置字号 |
+
+> 所有应用快捷键都带 `Shift`，是为了不抢 shell 的 `Ctrl+N`（下一条历史）、`Ctrl+W`（删除前一个词）这类键位；`Tab`、`Alt+字母`、方向键等也全部原样送给远端。
 
 ### 主题
 
@@ -107,8 +109,7 @@ SSH 客户端最难的不是握手，而是把密钥、agent、跳板、known_ho
 
 ## 已知限制
 
-- Windows 已实测可用（SSH 走管道 + `ssh -tt`），但**远端终端尺寸固定**（默认 80×24），拖动窗口不会重排
-- ConPTY 后端已实现但默认关闭（`--conpty`）：实测中它挂上了控制台，却没把子进程的标准输出接到我们的管道
+- Windows 上 ConPTY 与管道两套后端都已实测；ConPTY 不可用时自动退回管道（后者远端尺寸固定）
 - macOS 用 `util.h` 的 `forkpty`，未实机测试
 - 没有 SFTP 文件面板、没有 X11 转发、没有 RDP（MobaXterm 的那部分不在当前范围）
 - 没有标签内搜索、没有分屏

@@ -80,17 +80,24 @@ int main(int argc, char *argv[])
 
     QCommandLineOption conPtyOption(
         QStringLiteral("conpty"),
-        QStringLiteral("Windows only: use the ConPTY backend instead of pipes (experimental)."));
+        QStringLiteral("Windows only: force the ConPTY backend (default)."));
     parser.addOption(conPtyOption);
+    QCommandLineOption pipesOption(
+        QStringLiteral("pipes"),
+        QStringLiteral("Windows only: force the pipe backend instead of ConPTY."));
+    parser.addOption(pipesOption);
 
     parser.process(app);
 
 #ifdef Q_OS_WIN
     if (parser.isSet(conPtyOption))
         vx::PtyProcess::setUseConPty(true);
-    const char *ptyBackend = vx::PtyProcess::useConPty() ? "conpty (experimental)" : "pipes (-tt)";
+    if (parser.isSet(pipesOption))
+        vx::PtyProcess::setUseConPty(false);
+    const char *ptyBackend = vx::PtyProcess::useConPty() ? "conpty" : "pipes (-tt)";
 #else
     Q_UNUSED(conPtyOption)
+    Q_UNUSED(pipesOption)
     const char *ptyBackend = "forkpty";
 #endif
     qInfo().noquote() << "VoiletXterm" << QCoreApplication::applicationVersion()

@@ -180,6 +180,15 @@ int main(int argc, char *argv[])
         CHECK(recorder->written == QByteArray("\033a", 2));
         recorder->written.clear();
 
+        // Tab must reach the shell as a byte, not move the focus.
+        QTest::keyClick(&widget, Qt::Key_Tab);
+        CHECK(recorder->written == QByteArray("\t"));
+        recorder->written.clear();
+
+        QTest::keyClick(&widget, Qt::Key_Backtab, Qt::ShiftModifier);
+        CHECK(recorder->written == QByteArray("\033[Z"));
+        recorder->written.clear();
+
         widget.screen()->setPrivateMode(1, true); // application cursor keys
         QTest::keyClick(&widget, Qt::Key_Left);
         CHECK(recorder->written == QByteArray("\033OD", 3));

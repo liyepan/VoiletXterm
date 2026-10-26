@@ -237,6 +237,14 @@ void TerminalWidget::showEvent(QShowEvent *event)
     recomputeGeometry();
 }
 
+// QWidget::event() runs focus navigation for Tab/Backtab *before* calling
+// keyPressEvent(), which made Tab switch widgets instead of reaching the shell.
+bool TerminalWidget::focusNextPrevChild(bool next)
+{
+    Q_UNUSED(next)
+    return false;
+}
+
 void TerminalWidget::onDataReceived(const QByteArray &data)
 {
     m_parser->feed(data);

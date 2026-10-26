@@ -73,6 +73,8 @@ protected:
     void focusOutEvent(QFocusEvent *event) override;
     void contextMenuEvent(QContextMenuEvent *event) override;
     void showEvent(QShowEvent *event) override;
+    // Tab is input, not focus navigation.
+    bool focusNextPrevChild(bool next) override;
 
 private slots:
     void onDataReceived(const QByteArray &data);

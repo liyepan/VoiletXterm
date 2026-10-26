@@ -123,7 +123,7 @@ void MainWindow::buildUi()
 void MainWindow::buildActions()
 {
     m_newSshAction = new QAction(tr("新建 SSH 会话..."), this);
-    m_newSshAction->setShortcut(QKeySequence(QStringLiteral("Ctrl+N")));
+    m_newSshAction->setShortcut(QKeySequence(QStringLiteral("Ctrl+Shift+N")));
     connect(m_newSshAction, &QAction::triggered, this, &MainWindow::newSshSession);
 
     m_newTelnetAction = new QAction(tr("新建 Telnet 会话..."), this);
@@ -133,7 +133,7 @@ void MainWindow::buildActions()
     connect(m_newSerialAction, &QAction::triggered, this, &MainWindow::newSerialSession);
 
     m_closeTabAction = new QAction(tr("关闭当前标签"), this);
-    m_closeTabAction->setShortcut(QKeySequence(QStringLiteral("Ctrl+W")));
+    m_closeTabAction->setShortcut(QKeySequence(QStringLiteral("Ctrl+Shift+W")));
     connect(m_closeTabAction, &QAction::triggered, this, &MainWindow::closeCurrentTab);
 
     m_copyAction = new QAction(tr("复制"), this);
@@ -172,13 +172,14 @@ void MainWindow::buildActions()
     });
 
     auto *quitAction = new QAction(tr("退出"), this);
-    quitAction->setShortcut(QKeySequence::Quit);
+    quitAction->setShortcut(QKeySequence(QStringLiteral("Ctrl+Shift+Q")));
     connect(quitAction, &QAction::triggered, this, &QWidget::close);
 
     auto *aboutAction = new QAction(tr("关于 VoiletXterm"), this);
     connect(aboutAction, &QAction::triggered, this, &MainWindow::showAbout);
 
-    QMenu *fileMenu = menuBar()->addMenu(tr("文件(&F)"));
+    // No Alt mnemonics: Alt+letter belongs to the shell (readline bindings).
+    QMenu *fileMenu = menuBar()->addMenu(tr("文件"));
     fileMenu->addAction(m_newSshAction);
     fileMenu->addAction(m_newTelnetAction);
     fileMenu->addAction(m_newSerialAction);
@@ -187,11 +188,11 @@ void MainWindow::buildActions()
     fileMenu->addSeparator();
     fileMenu->addAction(quitAction);
 
-    QMenu *editMenu = menuBar()->addMenu(tr("编辑(&E)"));
+    QMenu *editMenu = menuBar()->addMenu(tr("编辑"));
     editMenu->addAction(m_copyAction);
     editMenu->addAction(m_pasteAction);
 
-    QMenu *viewMenu = menuBar()->addMenu(tr("视图(&V)"));
+    QMenu *viewMenu = menuBar()->addMenu(tr("视图"));
     viewMenu->addAction(m_zoomInAction);
     viewMenu->addAction(m_zoomOutAction);
     viewMenu->addAction(m_zoomResetAction);
@@ -221,7 +222,7 @@ void MainWindow::buildActions()
         ThemeManager::instance()->setMode(ThemeManager::Mode(action->data().toInt()));
     });
 
-    QMenu *helpMenu = menuBar()->addMenu(tr("帮助(&H)"));
+    QMenu *helpMenu = menuBar()->addMenu(tr("帮助"));
     helpMenu->addAction(aboutAction);
 
     QToolBar *toolbar = addToolBar(tr("主工具栏"));

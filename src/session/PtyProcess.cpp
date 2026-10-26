@@ -236,7 +236,8 @@ bool isExecutableOnPath(const QString &program)
 #endif
 
 namespace {
-bool g_useConPty = false;
+// Windows: ConPTY by default, with an automatic fall back to pipes.
+bool g_useConPty = true;
 }
 
 void PtyProcess::setUseConPty(bool enabled)
@@ -280,8 +281,9 @@ bool PtyProcess::start(const QString &program, const QStringList &args,
     }
 
     if (!loadConPty()) {
-        m_error = tr("当前系统不支持 ConPTY，需要 Windows 10 1809 或更新版本");
-        return false;
+        qWarning().noquote() << "[pty] ConPTY unavailable on this system, using pipes";
+        startPipeFallback();
+        return true;
     }
 
     d = new Private;
