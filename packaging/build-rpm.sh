@@ -39,6 +39,7 @@ cp -a "$stage"/usr %{buildroot}/usr
 /usr/bin/voiletxterm
 /usr/share/applications/voiletxterm.desktop
 /usr/share/icons/hicolor/256x256/apps/voiletxterm.png
+/usr/share/doc/voiletxterm/OFL.txt
 
 %changelog
 EOF

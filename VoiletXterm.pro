@@ -26,6 +26,8 @@ DEFINES += QT_DEPRECATED_WARNINGS
 
 INCLUDEPATH += src
 
+RESOURCES += resources/fonts.qrc
+
 SOURCES += \
     src/main.cpp \
     src/core/CharWidth.cpp \
@@ -76,5 +78,7 @@ unix:!macx {
     desktop.path = /usr/share/applications
     icon.files = packaging/voiletxterm.png
     icon.path = /usr/share/icons/hicolor/256x256/apps
-    INSTALLS += target desktop icon
+    docfile.files = resources/fonts/OFL.txt
+    docfile.path = /usr/share/doc/voiletxterm
+    INSTALLS += target desktop icon docfile
 }

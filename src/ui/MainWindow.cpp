@@ -422,7 +422,8 @@ void MainWindow::showAbout()
     QMessageBox::about(this, tr("关于 VoiletXterm"),
                        tr("<h3>VoiletXterm</h3>"
                           "<p>一个轻量的 SSH / Telnet / 串口终端工作台。</p>"
-                          "<p>Qt %1 · 自研 VT100/xterm 终端内核</p>")
+                          "<p>Qt %1 · 自研 VT100/xterm 终端内核</p>"
+                          "<p>终端字体：JetBrains Mono NL（SIL Open Font License 1.1）</p>")
                            .arg(QString::fromLatin1(qVersion())));
 }
 

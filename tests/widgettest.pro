@@ -16,3 +16,5 @@ HEADERS += ../src/core/Screen.h \
     ../src/core/VtParser.h \
     ../src/term/TerminalWidget.h \
     ../src/session/Transport.h
+
+RESOURCES += ../../resources/fonts.qrc
