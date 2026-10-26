@@ -2,24 +2,192 @@
 
 #include <QSocketNotifier>
 
-#ifndef Q_OS_UNIX
-#include <QDebug>
+#include <algorithm>
+
+#ifdef Q_OS_WIN
+
+#ifndef WIN32_LEAN_AND_MEAN
+#define WIN32_LEAN_AND_MEAN
+#endif
+#ifndef NOMINMAX
+#define NOMINMAX
+#endif
+#include <windows.h>
+
+#include <atomic>
+#include <cstring>
+#include <string>
+#include <thread>
+#include <vector>
+
+// Older mingw-w64 headers do not know the ConPTY attribute.
+#ifndef PROC_THREAD_ATTRIBUTE_PSEUDOCONSOLE
+#define PROC_THREAD_ATTRIBUTE_PSEUDOCONSOLE ((DWORD_PTR)0x00020016)
 #endif
 
-#ifdef Q_OS_UNIX
+#else // Q_OS_UNIX
+
 #include <cerrno>
 #include <cstdlib>
 #include <cstring>
 #include <fcntl.h>
+
+#ifdef Q_OS_MACOS
+#include <util.h>
+#else
 #include <pty.h>
+#endif
+
 #include <signal.h>
 #include <sys/ioctl.h>
 #include <sys/wait.h>
 #include <unistd.h>
-#include <vector>
+
 #endif
 
 namespace vx {
+
+#ifdef Q_OS_WIN
+
+namespace {
+
+// ConPTY entry points. They only exist on Windows 10 1809+, so they are
+// resolved at runtime instead of being imported at link time.
+using CreatePseudoConsoleFn = HRESULT(WINAPI *)(COORD, HANDLE, HANDLE, DWORD, void **);
+using ResizePseudoConsoleFn = HRESULT(WINAPI *)(void *, COORD);
+using ClosePseudoConsoleFn = void(WINAPI *)(void *);
+
+CreatePseudoConsoleFn g_createPseudoConsole = nullptr;
+ResizePseudoConsoleFn g_resizePseudoConsole = nullptr;
+ClosePseudoConsoleFn g_closePseudoConsole = nullptr;
+bool g_conPtyChecked = false;
+
+bool loadConPty()
+{
+    if (g_conPtyChecked)
+        return g_createPseudoConsole != nullptr;
+    g_conPtyChecked = true;
+
+    HMODULE kernel = GetModuleHandleW(L"kernel32.dll");
+    if (!kernel)
+        return false;
+
+    g_createPseudoConsole =
+        reinterpret_cast<CreatePseudoConsoleFn>(GetProcAddress(kernel, "CreatePseudoConsole"));
+    g_resizePseudoConsole =
+        reinterpret_cast<ResizePseudoConsoleFn>(GetProcAddress(kernel, "ResizePseudoConsole"));
+    g_closePseudoConsole =
+        reinterpret_cast<ClosePseudoConsoleFn>(GetProcAddress(kernel, "ClosePseudoConsole"));
+
+    if (!g_createPseudoConsole || !g_resizePseudoConsole || !g_closePseudoConsole) {
+        g_createPseudoConsole = nullptr;
+        g_resizePseudoConsole = nullptr;
+        g_closePseudoConsole = nullptr;
+        return false;
+    }
+    return true;
+}
+
+// Quote one argument following the CommandLineToArgvW rules.
+QString quoteArgument(const QString &argument)
+{
+    if (!argument.isEmpty() && !argument.contains(QLatin1Char(' '))
+        && !argument.contains(QLatin1Char('\t')) && !argument.contains(QLatin1Char('"'))
+        && !argument.contains(QLatin1Char('\n'))) {
+        return argument;
+    }
+
+    QString quoted;
+    quoted.reserve(argument.size() + 2);
+    quoted += QLatin1Char('"');
+
+    int backslashes = 0;
+    for (const QChar ch : argument) {
+        if (ch == QLatin1Char('\\')) {
+            ++backslashes;
+            continue;
+        }
+        if (ch == QLatin1Char('"')) {
+            quoted += QString(backslashes * 2 + 1, QChar('\\'));
+            quoted += QChar('"');
+            backslashes = 0;
+            continue;
+        }
+        if (backslashes > 0) {
+            quoted += QString(backslashes, QChar('\\'));
+            backslashes = 0;
+        }
+        quoted += ch;
+    }
+    if (backslashes > 0)
+        quoted += QString(backslashes * 2, QChar('\\'));
+    quoted += QChar('"');
+    return quoted;
+}
+
+QByteArray buildEnvironmentBlock(const QHash<QString, QString> &extra)
+{
+    QHash<QString, QString> values;
+    LPWCH block = GetEnvironmentStringsW();
+    if (block) {
+        for (LPWCH cursor = block; *cursor; cursor += wcslen(cursor) + 1) {
+            const QString entry = QString::fromWCharArray(cursor);
+            const int eq = entry.indexOf(QLatin1Char('='));
+            if (eq <= 0)
+                continue;
+            values.insert(entry.left(eq).toUpper(), entry.mid(eq + 1));
+        }
+        FreeEnvironmentStringsW(block);
+    }
+    for (auto it = extra.constBegin(); it != extra.constEnd(); ++it)
+        values.insert(it.key().toUpper(), it.value());
+
+    QString joined;
+    for (auto it = values.constBegin(); it != values.constEnd(); ++it) {
+        joined += it.key();
+        joined += QLatin1Char('=');
+        joined += it.value();
+        joined += QChar(ushort(0));
+    }
+    joined += QChar(ushort(0));
+
+    return QByteArray(reinterpret_cast<const char *>(joined.utf16()),
+                      joined.size() * int(sizeof(ushort)));
+}
+
+} // namespace
+
+struct PtyProcess::Private {
+    void *pty = nullptr;
+    HANDLE process = nullptr;
+    HANDLE inputWrite = nullptr;
+    HANDLE outputRead = nullptr;
+    DWORD pid = 0;
+    std::atomic<bool> stop{false};
+    std::thread reader;
+};
+
+#else // ------------------------------------------------------------- POSIX
+
+namespace {
+
+bool isExecutableOnPath(const QString &program)
+{
+    const QByteArray name = program.toLocal8Bit();
+    const QByteArray path = qgetenv("PATH");
+    for (const QByteArray &dir : path.split(':')) {
+        if (dir.isEmpty())
+            continue;
+        const QByteArray candidate = dir + '/' + name;
+        if (::access(candidate.constData(), X_OK) == 0)
+            return true;
+    }
+    return false;
+}
+
+} // namespace
+
+#endif
 
 PtyProcess::PtyProcess(QObject *parent)
     : QObject(parent)
@@ -34,19 +202,180 @@ PtyProcess::~PtyProcess()
 bool PtyProcess::start(const QString &program, const QStringList &args,
                        const QHash<QString, QString> &environment, int cols, int rows)
 {
-#ifdef Q_OS_UNIX
+#ifdef Q_OS_WIN
+
+    if (d)
+        return false;
+    if (!loadConPty()) {
+        m_error = tr("当前系统不支持 ConPTY，需要 Windows 10 1809 或更新版本");
+        return false;
+    }
+
+    d = new Private;
+
+    HANDLE inputRead = nullptr;
+    HANDLE inputWrite = nullptr;
+    HANDLE outputRead = nullptr;
+    HANDLE outputWrite = nullptr;
+    if (!CreatePipe(&inputRead, &inputWrite, nullptr, 0)
+        || !CreatePipe(&outputRead, &outputWrite, nullptr, 0)) {
+        m_error = tr("创建管道失败");
+        if (inputRead)
+            CloseHandle(inputRead);
+        if (inputWrite)
+            CloseHandle(inputWrite);
+        delete d;
+        d = nullptr;
+        return false;
+    }
+
+    COORD size;
+    size.X = static_cast<SHORT>(std::max(1, cols));
+    size.Y = static_cast<SHORT>(std::max(1, rows));
+
+    const HRESULT created = g_createPseudoConsole(size, inputRead, outputWrite, 0, &d->pty);
+    if (FAILED(created)) {
+        m_error = tr("创建 ConPTY 失败（错误码 %1）").arg(qint32(created), 0, 16);
+        CloseHandle(inputRead);
+        CloseHandle(inputWrite);
+        CloseHandle(outputRead);
+        CloseHandle(outputWrite);
+        delete d;
+        d = nullptr;
+        return false;
+    }
+
+    // ConPTY owns the terminal side of the pipes now.
+    CloseHandle(inputRead);
+    CloseHandle(outputWrite);
+    d->inputWrite = inputWrite;
+    d->outputRead = outputRead;
+
+    STARTUPINFOEXW startup;
+    ZeroMemory(&startup, sizeof(startup));
+    startup.StartupInfo.cb = sizeof(startup);
+
+    SIZE_T attributeSize = 0;
+    InitializeProcThreadAttributeList(nullptr, 1, 0, &attributeSize);
+    startup.lpAttributeList =
+        static_cast<LPPROC_THREAD_ATTRIBUTE_LIST>(HeapAlloc(GetProcessHeap(), 0, attributeSize));
+    if (!startup.lpAttributeList
+        || !InitializeProcThreadAttributeList(startup.lpAttributeList, 1, 0, &attributeSize)) {
+        m_error = tr("初始化进程属性失败");
+        if (startup.lpAttributeList)
+            HeapFree(GetProcessHeap(), 0, startup.lpAttributeList);
+        CloseHandle(d->inputWrite);
+        CloseHandle(d->outputRead);
+        g_closePseudoConsole(d->pty);
+        d->inputWrite = nullptr;
+        d->outputRead = nullptr;
+        d->pty = nullptr;
+        delete d;
+        d = nullptr;
+        return false;
+    }
+
+    UpdateProcThreadAttribute(startup.lpAttributeList, 0,
+                              PROC_THREAD_ATTRIBUTE_PSEUDOCONSOLE, d->pty,
+                              sizeof(d->pty), nullptr, nullptr);
+
+    QString commandLine = quoteArgument(program);
+    for (const QString &argument : args)
+        commandLine += QLatin1Char(' ') + quoteArgument(argument);
+    std::wstring mutableCommandLine = commandLine.toStdWString();
+    QByteArray environmentBlock = buildEnvironmentBlock(environment);
+
+    PROCESS_INFORMATION processInfo;
+    ZeroMemory(&processInfo, sizeof(processInfo));
+    const BOOL created2 = CreateProcessW(
+        nullptr, mutableCommandLine.empty() ? nullptr : &mutableCommandLine[0],
+        nullptr, nullptr, FALSE,
+        EXTENDED_STARTUPINFO_PRESENT | CREATE_UNICODE_ENVIRONMENT,
+        environmentBlock.isEmpty() ? nullptr : environmentBlock.data(),
+        nullptr, &startup.StartupInfo, &processInfo);
+
+    DeleteProcThreadAttributeList(startup.lpAttributeList);
+    HeapFree(GetProcessHeap(), 0, startup.lpAttributeList);
+
+    if (!created2) {
+        m_error = tr("无法启动 %1（错误码 %2）").arg(program).arg(int(GetLastError()));
+        CloseHandle(d->inputWrite);
+        CloseHandle(d->outputRead);
+        g_closePseudoConsole(d->pty);
+        d->inputWrite = nullptr;
+        d->outputRead = nullptr;
+        d->pty = nullptr;
+        delete d;
+        d = nullptr;
+        return false;
+    }
+
+    CloseHandle(processInfo.hThread);
+    d->process = processInfo.hProcess;
+    d->pid = processInfo.dwProcessId;
+
+    // A blocking ReadFile cannot be cancelled cleanly, so the reader polls the
+    // pipe instead; 4 ms is well below the perceptible latency of a terminal.
+    d->reader = std::thread([this] {
+        Private *state = d;
+        if (!state)
+            return;
+        char buffer[65536];
+        for (;;) {
+            if (state->stop)
+                return;
+            DWORD available = 0;
+            if (!PeekNamedPipe(state->outputRead, nullptr, 0, nullptr, &available, nullptr))
+                break;
+            if (available == 0) {
+                Sleep(4);
+                continue;
+            }
+            const DWORD want = available > sizeof(buffer) ? DWORD(sizeof(buffer)) : available;
+            DWORD read = 0;
+            if (!ReadFile(state->outputRead, buffer, want, &read, nullptr) || read == 0)
+                break;
+            const QByteArray chunk(buffer, int(read));
+            QMetaObject::invokeMethod(this, [this, chunk] { emit dataRead(chunk); },
+                                      Qt::QueuedConnection);
+        }
+        if (state->stop)
+            return;
+        QMetaObject::invokeMethod(this, [this] { finish(0, tr("会话已结束")); },
+                                  Qt::QueuedConnection);
+    });
+    return true;
+
+#else // ------------------------------------------------------------- POSIX
+
     if (m_fd >= 0)
         return false;
 
+    if (program.isEmpty()) {
+        m_error = tr("未指定要执行的程序");
+        return false;
+    }
+    if (program.contains(QLatin1Char('/'))) {
+        if (::access(program.toLocal8Bit().constData(), X_OK) != 0) {
+            m_error = tr("找不到可执行文件 %1").arg(program);
+            return false;
+        }
+    } else if (!isExecutableOnPath(program)) {
+        m_error = tr("在 PATH 中找不到 %1").arg(program);
+        return false;
+    }
+
     struct winsize ws;
     std::memset(&ws, 0, sizeof(ws));
-    ws.ws_col = ushort(cols);
-    ws.ws_row = ushort(rows);
+    ws.ws_col = ushort(std::max(1, cols));
+    ws.ws_row = ushort(std::max(1, rows));
 
     int master = -1;
     const pid_t pid = forkpty(&master, nullptr, nullptr, &ws);
-    if (pid < 0)
+    if (pid < 0) {
+        m_error = tr("创建伪终端失败");
         return false;
+    }
 
     if (pid == 0) {
         setenv("TERM", "xterm-256color", 1);
@@ -73,19 +402,13 @@ bool PtyProcess::start(const QString &program, const QStringList &args,
     m_readNotifier = new QSocketNotifier(m_fd, QSocketNotifier::Read, this);
     connect(m_readNotifier, &QSocketNotifier::activated, this, &PtyProcess::onReadable);
     return true;
-#else
-    Q_UNUSED(program)
-    Q_UNUSED(args)
-    Q_UNUSED(environment)
-    Q_UNUSED(cols)
-    Q_UNUSED(rows)
-    return false;
+
 #endif
 }
 
 void PtyProcess::onReadable()
 {
-#ifdef Q_OS_UNIX
+#ifndef Q_OS_WIN
     char buffer[65536];
     for (;;) {
         const ssize_t n = ::read(m_fd, buffer, sizeof(buffer));
@@ -108,15 +431,36 @@ void PtyProcess::onReadable()
 
 void PtyProcess::write(const QByteArray &data)
 {
-    if (m_fd < 0 || data.isEmpty())
+    if (data.isEmpty())
+        return;
+
+#ifdef Q_OS_WIN
+
+    if (!d || !d->inputWrite)
+        return;
+    const char *cursor = data.constData();
+    int remaining = data.size();
+    while (remaining > 0) {
+        DWORD written = 0;
+        if (!WriteFile(d->inputWrite, cursor, DWORD(remaining), &written, nullptr) || written == 0)
+            break;
+        cursor += written;
+        remaining -= int(written);
+    }
+
+#else
+
+    if (m_fd < 0)
         return;
     m_outBuffer.append(data);
     flushOutput();
+
+#endif
 }
 
 void PtyProcess::flushOutput()
 {
-#ifdef Q_OS_UNIX
+#ifndef Q_OS_WIN
     while (!m_outBuffer.isEmpty() && m_fd >= 0) {
         const ssize_t n = ::write(m_fd, m_outBuffer.constData(), size_t(m_outBuffer.size()));
         if (n > 0) {
@@ -133,9 +477,8 @@ void PtyProcess::flushOutput()
             break;
         }
     }
-    if (m_writeNotifier && m_outBuffer.isEmpty()) {
+    if (m_writeNotifier && m_outBuffer.isEmpty())
         m_writeNotifier->setEnabled(false);
-    }
 #endif
 }
 
@@ -146,22 +489,27 @@ void PtyProcess::onWritable()
 
 void PtyProcess::setWindowSize(int cols, int rows)
 {
-#ifdef Q_OS_UNIX
+#ifdef Q_OS_WIN
+    if (d && d->pty) {
+        COORD size;
+        size.X = static_cast<SHORT>(std::max(1, cols));
+        size.Y = static_cast<SHORT>(std::max(1, rows));
+        g_resizePseudoConsole(d->pty, size);
+    }
+#else
     if (m_fd < 0)
         return;
     struct winsize ws;
     std::memset(&ws, 0, sizeof(ws));
-    ws.ws_col = ushort(cols);
-    ws.ws_row = ushort(rows);
+    ws.ws_col = ushort(std::max(1, cols));
+    ws.ws_row = ushort(std::max(1, rows));
     ioctl(m_fd, TIOCSWINSZ, &ws);
-#else
-    Q_UNUSED(cols)
-    Q_UNUSED(rows)
 #endif
 }
 
 void PtyProcess::closeFd()
 {
+#ifndef Q_OS_WIN
     if (m_readNotifier) {
         m_readNotifier->setEnabled(false);
         delete m_readNotifier;
@@ -176,6 +524,7 @@ void PtyProcess::closeFd()
         ::close(m_fd);
         m_fd = -1;
     }
+#endif
 }
 
 void PtyProcess::finish(int exitCode, const QString &reason)
@@ -183,9 +532,42 @@ void PtyProcess::finish(int exitCode, const QString &reason)
     if (m_finished)
         return;
     m_finished = true;
-    closeFd();
 
-#ifdef Q_OS_UNIX
+#ifdef Q_OS_WIN
+
+    if (d) {
+        // Ask the reader to exit before any handle is closed under its feet.
+        d->stop = true;
+        if (d->reader.joinable())
+            d->reader.join();
+        if (d->process) {
+            DWORD code = 0;
+            WaitForSingleObject(d->process, 500);
+            if (GetExitCodeProcess(d->process, &code) && exitCode == 0
+                && code != STILL_ACTIVE && code != 0) {
+                exitCode = int(code);
+            }
+            CloseHandle(d->process);
+            d->process = nullptr;
+        }
+        if (d->outputRead) {
+            CloseHandle(d->outputRead);
+            d->outputRead = nullptr;
+        }
+        if (d->inputWrite) {
+            CloseHandle(d->inputWrite);
+            d->inputWrite = nullptr;
+        }
+        if (d->pty) {
+            g_closePseudoConsole(d->pty);
+            d->pty = nullptr;
+        }
+    }
+    emit closed(exitCode, reason);
+
+#else
+
+    closeFd();
     if (m_pid > 0) {
         int status = 0;
         for (int i = 0; i < 20; ++i) {
@@ -197,16 +579,46 @@ void PtyProcess::finish(int exitCode, const QString &reason)
         if (WIFEXITED(status) && exitCode < 0)
             exitCode = WEXITSTATUS(status);
     }
-#endif
     emit closed(exitCode, reason);
+
+#endif
 }
 
 void PtyProcess::stop()
 {
+#ifdef Q_OS_WIN
+
+    if (!d)
+        return;
+    d->stop = true;
+    if (d->reader.joinable())
+        d->reader.join();
+    if (d->inputWrite) {
+        CloseHandle(d->inputWrite);
+        d->inputWrite = nullptr;
+    }
+    if (d->outputRead) {
+        CloseHandle(d->outputRead);
+        d->outputRead = nullptr;
+    }
+    if (d->process) {
+        TerminateProcess(d->process, 0);
+        CloseHandle(d->process);
+        d->process = nullptr;
+    }
+    if (d->pty) {
+        g_closePseudoConsole(d->pty);
+        d->pty = nullptr;
+    }
+    delete d;
+    d = nullptr;
+    m_finished = true;
+
+#else
+
     if (m_fd < 0 && m_pid <= 0)
         return;
     closeFd();
-#ifdef Q_OS_UNIX
     if (m_pid > 0) {
         ::kill(pid_t(m_pid), SIGHUP);
         int status = 0;
@@ -216,9 +628,28 @@ void PtyProcess::stop()
             waitpid(pid_t(m_pid), &status, 0);
         }
     }
-#endif
     m_pid = -1;
     m_finished = true;
+
+#endif
+}
+
+bool PtyProcess::isRunning() const
+{
+#ifdef Q_OS_WIN
+    return d != nullptr && d->process != nullptr;
+#else
+    return m_fd >= 0;
+#endif
+}
+
+qint64 PtyProcess::processId() const
+{
+#ifdef Q_OS_WIN
+    return d ? qint64(d->pid) : -1;
+#else
+    return m_pid;
+#endif
 }
 
 } // namespace vx

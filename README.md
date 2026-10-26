@@ -20,7 +20,7 @@ MobaXterm 很好用，但只跑 Windows、源码闭源。VoiletXterm 只做三�
 
 | 类型 | 实现 | 说明 |
 | --- | --- | --- |
-| SSH | 系统 `ssh` 跑在伪终端（pty）上 | `~/.ssh/config`、密钥、agent、`ProxyJump`、known_hosts、二次验证全部照常生效 |
+| SSH | 系统 `ssh` 跑在伪终端上（POSIX 用 `forkpty`，Windows 用 ConPTY） | `~/.ssh/config`、密钥、agent、`ProxyJump`、known_hosts、二次验证全部照常生效 |
 | Telnet | 内置 IAC 协商 | 自动回 `WILL/DO`，支持 NAWS 窗口尺寸随窗口变化 |
 | 串口 | QSerialPort | 波特率 / 数据位 / 校验 / 停止位 / 流控 / 本地回显 |
 
@@ -43,6 +43,8 @@ make -j$(nproc)
 ```
 
 串口需要读写权限，通常把用户加进 `dialout` 组：`sudo usermod -aG dialout $USER`。
+
+Windows 直接用 Qt Creator 打开 `VoiletXterm.pro`（Kit 选 Desktop Qt 5.15.2 MinGW 64-bit）即可编译。SSH 走 ConPTY，需要 **Windows 10 1809 及以上**，并且 PATH 里要有 OpenSSH 客户端（`ssh.exe`，Win10/11 默认自带）。
 
 ## 使用
 
@@ -87,7 +89,8 @@ SSH 客户端最难的不是握手，而是把密钥、agent、跳板、known_ho
 
 ## 已知限制
 
-- 只在 Linux 上验证过；`forkpty` 是 POSIX 接口，Windows 需要换成 ConPTY 才能编译
+- Linux 上完整验证；macOS 用 `util.h` 的 `forkpty`，未实机测试；Windows 走 ConPTY（Win10 1809+），代码已就绪但未在真机验证
+- Windows 上没有 ConPTY 的系统（Win7/8）会直接提示不支持，不会静默失败
 - 没有 SFTP 文件面板、没有 X11 转发、没有 RDP（MobaXterm 的那部分不在当前范围）
 - 没有标签内搜索、没有分屏
 - SSH 密码登录在终端里交互，不经过独立密码框

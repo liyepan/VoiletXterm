@@ -45,6 +45,7 @@ qtermwidget 是 GPL-2.0，会传染整个项目，因此排除——这也是自
 ## 后果
 
 - 正面：单二进制、启动快、渲染可控、无第三方终端依赖、内核可无头测试
-- 负面：`forkpty` 绑定 POSIX，Windows 需要单独实现（ConPTY）
+- 负面：伪终端需要两套后端——POSIX 的 `forkpty`，Windows 的 ConPTY（Win10 1809+，运行时动态解析 `CreatePseudoConsole`，老系统给出明确提示）
+- 正面：ConPTY 让 Windows 上的窗口尺寸、Ctrl+C 语义、全屏程序（vim/htop）与 POSIX 一致
 - 负面：Qt 是单一供应商，遇到框架层 bug 只能等上游或绕路
-- 待办：Windows 支持、SFTP 面板、标签内搜索、分屏
+- 待办：SFTP 面板、标签内搜索、分屏

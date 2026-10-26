@@ -74,7 +74,8 @@ bool SshTransport::start(int cols, int rows)
     });
 
     if (!m_pty->start(program, args, env, cols, rows)) {
-        emitFinished(tr("无法启动 ssh 进程"));
+        const QString detail = m_pty->errorString();
+        emitFinished(detail.isEmpty() ? tr("无法启动 ssh 进程") : detail);
         return false;
     }
 

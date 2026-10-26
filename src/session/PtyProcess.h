@@ -11,6 +11,9 @@ namespace vx {
 
 // Runs a child process attached to a pseudo terminal, so window size changes
 // are propagated and interactive programs (ssh, login shells) behave normally.
+//
+// POSIX uses forkpty(); Windows uses the ConPTY API (Windows 10 1809+), which
+// is resolved at runtime so the binary still starts on older systems.
 class PtyProcess : public QObject
 {
     Q_OBJECT
@@ -23,8 +26,10 @@ public:
     void write(const QByteArray &data);
     void setWindowSize(int cols, int rows);
     void stop();
-    bool isRunning() const { return m_fd >= 0; }
-    qint64 processId() const { return m_pid; }
+    bool isRunning() const;
+    qint64 processId() const;
+
+    QString errorString() const { return m_error; }
 
 signals:
     void dataRead(const QByteArray &data);
@@ -39,11 +44,17 @@ private:
     void finish(int exitCode, const QString &reason);
     void closeFd();
 
+#ifdef Q_OS_WIN
+    struct Private;
+    Private *d = nullptr;
+#endif
+
     int m_fd = -1;
     qint64 m_pid = -1;
     QSocketNotifier *m_readNotifier = nullptr;
     QSocketNotifier *m_writeNotifier = nullptr;
     QByteArray m_outBuffer;
+    QString m_error;
     bool m_finished = false;
 };
 
