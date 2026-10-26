@@ -48,9 +48,13 @@ void SshTransport::buildCommand(QString &program, QStringList &args, QHash<QStri
         : QStringLiteral("%1@%2").arg(m_spec.user, m_spec.host);
     args << target;
 
-    if (!m_spec.remoteCommand.trimmed().isEmpty()) {
-        args << QStringLiteral("-t") << m_spec.remoteCommand;
-    }
+    // Always ask for a remote terminal: we are a terminal client. This also
+    // covers the Windows case where ssh fails to detect the ConPTY console as a
+    // tty on its own ("Pseudo-terminal will not be allocated").
+    args << QStringLiteral("-t");
+
+    if (!m_spec.remoteCommand.trimmed().isEmpty())
+        args << m_spec.remoteCommand;
 
     env.insert(QStringLiteral("LANG"), QStringLiteral("en_US.UTF-8"));
 }
