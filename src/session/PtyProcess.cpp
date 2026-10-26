@@ -587,7 +587,6 @@ void PtyProcess::teardownConPty()
 
 void PtyProcess::startPipeFallback()
 {
-#ifdef Q_OS_WIN
     if (m_pipeProcess)
         return;
 
@@ -600,7 +599,7 @@ void PtyProcess::startPipeFallback()
     environment.insert(QStringLiteral("TERM_PROGRAM"), QStringLiteral("VoiletXterm"));
     for (auto it = m_environment.constBegin(); it != m_environment.constEnd(); ++it)
         environment.insert(it.key(), it.value());
-    m_pipeProcess->setEnvironment(environment);
+    m_pipeProcess->setProcessEnvironment(environment);
 
     connect(m_pipeProcess, &QProcess::readyReadStandardOutput, this, [this] {
         const QByteArray chunk = m_pipeProcess->readAllStandardOutput();
@@ -614,9 +613,8 @@ void PtyProcess::startPipeFallback()
         }
         emit dataRead(chunk);
     });
-    connect(m_pipeProcess, &QProcess::finished, this, [this](int exitCode, QProcess::ExitStatus) {
-        finish(exitCode, tr("会话已结束"));
-    });
+    connect(m_pipeProcess, QOverload<int, QProcess::ExitStatus>::of(&QProcess::finished), this,
+            [this](int exitCode, QProcess::ExitStatus) { finish(exitCode, tr("会话已结束")); });
     connect(m_pipeProcess, &QProcess::errorOccurred, this, [this](QProcess::ProcessError error) {
         if (error == QProcess::FailedToStart)
             finish(-1, tr("无法启动 %1").arg(m_program));
@@ -624,7 +622,6 @@ void PtyProcess::startPipeFallback()
 
     qInfo().noquote() << "[pty] pipe backend |" << m_program << m_args.join(QLatin1Char(' '));
     m_pipeProcess->start(m_program, m_args);
-#endif
 }
 
 void PtyProcess::write(const QByteArray &data)

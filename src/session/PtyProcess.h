@@ -51,17 +51,20 @@ private:
     void finish(int exitCode, const QString &reason);
     void closeFd();
 
-    // Windows backend helpers; on other platforms they compile to no-ops.
+    // ConPTY teardown (Windows only, no-op elsewhere).
     void teardownConPty();
+    // Pipe based backend. It is compiled on every platform so the code is
+    // covered by the normal builds; only Windows selects it by default.
     void startPipeFallback();
 
-#ifdef Q_OS_WIN
-    struct Private;
-    Private *d = nullptr;
     QProcess *m_pipeProcess = nullptr;
     QString m_program;
     QStringList m_args;
     QHash<QString, QString> m_environment;
+
+#ifdef Q_OS_WIN
+    struct Private;
+    Private *d = nullptr;
 #endif
 
     int m_fd = -1;
