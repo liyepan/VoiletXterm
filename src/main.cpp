@@ -4,6 +4,7 @@
 
 #include <QApplication>
 #include <QCommandLineParser>
+#include <QDebug>
 
 namespace {
 
@@ -76,6 +77,14 @@ int main(int argc, char *argv[])
         QStringLiteral("scheme"));
     parser.addOption(themeOption);
     parser.process(app);
+
+#ifdef Q_OS_WIN
+    const char *ptyBackend = "conpty";
+#else
+    const char *ptyBackend = "forkpty";
+#endif
+    qInfo().noquote() << "VoiletXterm" << QCoreApplication::applicationVersion()
+                      << "| pty backend:" << ptyBackend;
 
     vx::ThemeManager::instance()->initialize();
 

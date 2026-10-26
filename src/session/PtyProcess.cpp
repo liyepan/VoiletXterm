@@ -13,6 +13,7 @@
 
 #include "PtyProcess.h"
 
+#include <QDebug>
 #include <QSocketNotifier>
 
 #include <algorithm>
@@ -276,6 +277,8 @@ bool PtyProcess::start(const QString &program, const QStringList &args,
     size.Y = static_cast<SHORT>(std::max(1, rows));
 
     const HRESULT created = g_createPseudoConsole(size, inputRead, outputWrite, 0, &d->pty);
+    qInfo().noquote() << "[pty] CreatePseudoConsole hr=" << Qt::hex << quint32(created)
+                      << "handle=" << (quintptr)d->pty;
     if (FAILED(created)) {
         m_error = tr("创建 ConPTY 失败（错误码 %1）").arg(qint32(created), 0, 16);
         CloseHandle(inputRead);
@@ -290,7 +293,7 @@ bool PtyProcess::start(const QString &program, const QStringList &args,
     d->inputWrite = inputWrite;
     d->outputRead = outputRead;
 
-    const bool debugPty = qEnvironmentVariableIsSet("VX_DEBUG");
+    qInfo().noquote() << "[pty] conpty start |" << program << args.join(QLatin1Char(' '));
 
     STARTUPINFOEXW startup;
     ZeroMemory(&startup, sizeof(startup));
@@ -329,8 +332,11 @@ bool PtyProcess::start(const QString &program, const QStringList &args,
     if (!UpdateProcThreadAttribute(startup.lpAttributeList, 0,
                                    PROC_THREAD_ATTRIBUTE_PSEUDOCONSOLE, d->pty,
                                    sizeof(d->pty), nullptr, nullptr)) {
-        return abortStart(tr("把伪终端挂到子进程失败（错误码 %1）").arg(int(GetLastError())));
+        const DWORD error = GetLastError();
+        qWarning().noquote() << "[pty] UpdateProcThreadAttribute failed, error=" << error;
+        return abortStart(tr("把伪终端挂到子进程失败（错误码 %1）").arg(int(error)));
     }
+    qInfo().noquote() << "[pty] attribute list ready";
 
     QString commandLine = quoteArgument(program);
     for (const QString &argument : args)
@@ -362,10 +368,7 @@ bool PtyProcess::start(const QString &program, const QStringList &args,
     CloseHandle(inputRead);
     CloseHandle(outputWrite);
 
-    if (debugPty) {
-        qDebug() << "[pty] conpty" << d->pty << "pid" << processInfo.dwProcessId
-                 << "cmd" << commandLine;
-    }
+    qInfo().noquote() << "[pty] CreateProcess ok, pid=" << processInfo.dwProcessId;
 
     CloseHandle(processInfo.hThread);
     d->process = processInfo.hProcess;
@@ -392,6 +395,10 @@ bool PtyProcess::start(const QString &program, const QStringList &args,
             DWORD read = 0;
             if (!ReadFile(state->outputRead, buffer, want, &read, nullptr) || read == 0)
                 break;
+            if (!m_loggedFirstData) {
+                m_loggedFirstData = true;
+                qInfo().noquote() << "[pty] first data" << int(read) << "bytes";
+            }
             const QByteArray chunk(buffer, int(read));
             QMetaObject::invokeMethod(this, [this, chunk] { emit dataRead(chunk); },
                                       Qt::QueuedConnection);
@@ -454,6 +461,7 @@ bool PtyProcess::start(const QString &program, const QStringList &args,
 
     m_fd = master;
     m_pid = pid;
+    qInfo().noquote() << "[pty] forkpty pid=" << qint64(pid) << program << args.join(QLatin1Char(' '));
     fcntl(m_fd, F_SETFL, fcntl(m_fd, F_GETFL) | O_NONBLOCK);
 
     m_readNotifier = new QSocketNotifier(m_fd, QSocketNotifier::Read, this);
@@ -470,6 +478,10 @@ void PtyProcess::onReadable()
     for (;;) {
         const ssize_t n = ::read(m_fd, buffer, sizeof(buffer));
         if (n > 0) {
+            if (!m_loggedFirstData) {
+                m_loggedFirstData = true;
+                qInfo().noquote() << "[pty] first data" << int(n) << "bytes";
+            }
             emit dataRead(QByteArray(buffer, int(n)));
         } else if (n == 0) {
             finish(0, QStringLiteral("会话已结束"));

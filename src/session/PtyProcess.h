@@ -56,6 +56,7 @@ private:
     QByteArray m_outBuffer;
     QString m_error;
     bool m_finished = false;
+    bool m_loggedFirstData = false;
 };
 
 } // namespace vx
