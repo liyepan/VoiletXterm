@@ -77,7 +77,7 @@ TerminalWidget::TerminalWidget(QWidget *parent)
     viewport()->setCursor(Qt::IBeamCursor);
     viewport()->setAutoFillBackground(false);
 
-    m_theme = darkVioletTheme();
+    m_theme = darkTheme();
     for (int i = 0; i < 256; ++i)
         m_palette[i] = QColor::fromRgb(QRgb(0xFF000000u | defaultPaletteColor(i)));
     for (int i = 0; i < 16; ++i)

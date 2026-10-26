@@ -136,7 +136,7 @@ int main(int argc, char *argv[])
 
     // --- the light scheme paints a light background with dark ink ---
     {
-        widget.setTheme(lightVioletTheme());
+        widget.setTheme(lightTheme());
         widget.parser()->feed("\r\nlight theme sample");
         QCoreApplication::processEvents();
         const QImage lightImage = widget.grab().toImage();
@@ -148,7 +148,7 @@ int main(int argc, char *argv[])
                 if (lightImage.pixelColor(x, y).lightness() < 90)
                     ++darkPixels;
         CHECK(darkPixels > 20);
-        widget.setTheme(darkVioletTheme());
+        widget.setTheme(darkTheme());
     }
 
     // --- keyboard input is encoded the way a shell expects ---
@@ -214,6 +214,32 @@ int main(int argc, char *argv[])
         CHECK(qApp->palette().color(QPalette::Window).lightness() > 180);
         CHECK(!qApp->styleSheet().contains(QLatin1Char('@')));
         CHECK(qApp->styleSheet().contains(QStringLiteral("#FFFFFF")));
+    }
+
+    // --- palettes must stay readable (WCAG contrast) ---
+    {
+        const TerminalTheme darkPalette = darkTheme();
+        CHECK(contrastRatio(darkPalette.foreground, darkPalette.background) >= 7.0);
+        // ansi[0] is the "black" slot and is expected to be dim on black.
+        for (int i = 1; i < 16; ++i)
+            CHECK(contrastRatio(darkPalette.ansi[i], darkPalette.background) >= 3.0);
+
+        const TerminalTheme lightPalette = lightTheme();
+        CHECK(contrastRatio(lightPalette.foreground, lightPalette.background) >= 7.0);
+        for (int i = 0; i < 16; ++i)
+            CHECK(contrastRatio(lightPalette.ansi[i], lightPalette.background) >= 3.0);
+
+        const UiColors darkUi = uiColors(true);
+        CHECK(contrastRatio(darkUi.text, darkUi.panel) >= 7.0);
+        CHECK(contrastRatio(darkUi.text, darkUi.window) >= 7.0);
+        CHECK(contrastRatio(darkUi.muted, darkUi.panel) >= 4.5);
+        CHECK(contrastRatio(darkUi.text, darkUi.selected) >= 4.5);
+        CHECK(contrastRatio(darkUi.border, darkUi.panel) >= 1.2);
+
+        const UiColors lightUi = uiColors(false);
+        CHECK(contrastRatio(lightUi.text, lightUi.panel) >= 7.0);
+        CHECK(contrastRatio(lightUi.muted, lightUi.panel) >= 4.5);
+        CHECK(contrastRatio(lightUi.text, lightUi.selected) >= 4.5);
     }
 
     if (g_failures == 0)
