@@ -34,6 +34,7 @@ SOURCES += \
     src/core/Palette.cpp \
     src/core/Screen.cpp \
     src/core/VtParser.cpp \
+    src/term/BundledFont.cpp \
     src/term/TerminalTheme.cpp \
     src/term/TerminalWidget.cpp \
     src/session/PtyProcess.cpp \
@@ -54,6 +55,7 @@ HEADERS += \
     src/core/Palette.h \
     src/core/Screen.h \
     src/core/VtParser.h \
+    src/term/BundledFont.h \
     src/term/TerminalTheme.h \
     src/term/TerminalWidget.h \
     src/session/PtyProcess.h \

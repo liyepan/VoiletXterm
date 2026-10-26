@@ -1,5 +1,6 @@
 #include "session/PtyProcess.h"
 #include "session/SessionSpec.h"
+#include "term/BundledFont.h"
 #include "ui/MainWindow.h"
 #include "ui/ThemeManager.h"
 
@@ -67,6 +68,18 @@ int main(int argc, char *argv[])
     QCoreApplication::setOrganizationName(QStringLiteral("VoiletXterm"));
     QCoreApplication::setApplicationName(QStringLiteral("VoiletXterm"));
     QCoreApplication::setApplicationVersion(QStringLiteral("0.1.0"));
+
+    // One font for the whole application: the terminal and the chrome should
+    // match, and it is compiled in so it exists on every platform.
+    const QString uiFamily = vx::bundledFontFamily();
+    if (!uiFamily.isEmpty()) {
+        QFont uiFont = QApplication::font();
+        uiFont.setFamily(uiFamily);
+        uiFont.setStyleHint(QFont::Monospace);
+        QApplication::setFont(uiFont);
+        qInfo().noquote() << "[ui] font" << QApplication::font().family()
+                          << QApplication::font().pointSize();
+    }
 
     QCommandLineParser parser;
     parser.setApplicationDescription(QStringLiteral("VoiletXterm - SSH / Telnet / serial terminal"));

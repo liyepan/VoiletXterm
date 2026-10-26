@@ -10,6 +10,7 @@ SOURCES += test_widget.cpp \
     ../src/core/CharWidth.cpp \
     ../src/core/Palette.cpp \
     ../src/core/VtParser.cpp \
+    ../src/term/BundledFont.cpp \
     ../src/term/TerminalTheme.cpp \
     ../src/term/TerminalWidget.cpp
 HEADERS += ../src/core/Screen.h \
@@ -17,4 +18,4 @@ HEADERS += ../src/core/Screen.h \
     ../src/term/TerminalWidget.h \
     ../src/session/Transport.h
 
-RESOURCES += ../../resources/fonts.qrc
+RESOURCES += ../resources/fonts.qrc

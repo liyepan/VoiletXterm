@@ -29,7 +29,8 @@ MobaXterm 很好用，但只跑 Windows、源码闭源。VoiletXterm 只做三�
 - 会话保存与复用（QSettings 持久化），新建/编辑/删除
 - 命令行直达：`voiletxterm user@host:22` / `telnet://host:port` / `serial:/dev/ttyUSB0@115200`
 - 界面有浅色 / 深色两套主题（可跟随系统或按时间自动切换），**终端始终黑底白字**，Ctrl+滚轮缩放字号
-- **内置 JetBrains Mono NL 字体**（SIL OFL 1.1），三平台外观一致，不需要用户自己装字体
+- **内置 JetBrains Mono NL 字体**（SIL OFL 1.1），界面和终端统一使用，三平台外观一致，不需要用户自己装字体
+  - 正文 Regular，按钮 Medium，标签页 SemiBold，终端可单独在「视图 → 字体」里调
 - **内置 JetBrains Mono NL 字体**（SIL OFL 1.1），三个平台外观一致，不需要用户自己装字体
 
 ## 构建

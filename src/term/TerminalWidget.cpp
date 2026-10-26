@@ -3,6 +3,7 @@
 #include "../core/Cell.h"
 #include "../core/CharWidth.h"
 #include "../core/Palette.h"
+#include "BundledFont.h"
 #include "../session/Transport.h"
 
 #include <QApplication>
@@ -26,37 +27,11 @@ namespace vx {
 
 namespace {
 
-// The terminal ships with JetBrains Mono NL (SIL OFL 1.1) compiled into the
-// binary, so the look is identical on every machine without asking the user to
-// install anything.
-QString bundledFontFamily()
-{
-    static const QString family = [] {
-        const char *faces[] = {
-            ":/fonts/JetBrainsMonoNL-Regular.ttf",
-            ":/fonts/JetBrainsMonoNL-Bold.ttf",
-            ":/fonts/JetBrainsMonoNL-Italic.ttf",
-            ":/fonts/JetBrainsMonoNL-BoldItalic.ttf",
-        };
-        QString resolved;
-        for (const char *face : faces) {
-            const int id = QFontDatabase::addApplicationFont(QString::fromLatin1(face));
-            if (id < 0)
-                continue;
-            const QStringList families = QFontDatabase::applicationFontFamilies(id);
-            if (resolved.isEmpty() && !families.isEmpty())
-                resolved = families.first();
-        }
-        return resolved;
-    }();
-    return family;
-}
-
 // Preference order matters: the first two families have a 1:2 Latin/CJK advance
 // ratio, so full width characters land exactly on two cells.
 QString pickDefaultFontFamily()
 {
-    const QString bundled = bundledFontFamily();
+    const QString bundled = vx::bundledFontFamily();
     if (!bundled.isEmpty())
         return bundled;
 

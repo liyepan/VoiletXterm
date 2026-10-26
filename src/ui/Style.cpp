@@ -60,6 +60,7 @@ const char *kStyleSheet = R"QSS(
         padding: 7px 18px; margin-right: 2px;
         border: 1px solid transparent; border-bottom: none;
         border-top-left-radius: 4px; border-top-right-radius: 4px;
+        font-weight: 600;
     }
     QTabBar::tab:hover:!selected { background: @panelAlt@; color: @text@; }
     QTabBar::tab:selected {
@@ -108,6 +109,7 @@ const char *kStyleSheet = R"QSS(
 
     QPushButton {
         background: @panelAlt@; color: @text@;
+        font-weight: 500;
         border: 1px solid @border@; border-radius: 5px;
         padding: 6px 18px; min-width: 64px; min-height: 20px;
     }
