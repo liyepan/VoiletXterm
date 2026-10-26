@@ -27,6 +27,8 @@
 #endif
 #include <windows.h>
 
+#include <QDebug>
+
 #include <atomic>
 #include <cstring>
 #include <string>
@@ -285,15 +287,35 @@ bool PtyProcess::start(const QString &program, const QStringList &args,
         return false;
     }
 
-    // ConPTY owns the terminal side of the pipes now.
-    CloseHandle(inputRead);
-    CloseHandle(outputWrite);
     d->inputWrite = inputWrite;
     d->outputRead = outputRead;
 
+    const bool debugPty = qEnvironmentVariableIsSet("VX_DEBUG");
+
     STARTUPINFOEXW startup;
     ZeroMemory(&startup, sizeof(startup));
-    startup.StartupInfo.cb = sizeof(startup);
+    startup.StartupInfo.cb = sizeof(STARTUPINFOEXW);
+
+    // Any failure below has to release everything that was allocated so far.
+    const auto abortStart = [&](const QString &message) {
+        m_error = message;
+        if (startup.lpAttributeList) {
+            DeleteProcThreadAttributeList(startup.lpAttributeList);
+            HeapFree(GetProcessHeap(), 0, startup.lpAttributeList);
+        }
+        CloseHandle(inputRead);
+        CloseHandle(outputWrite);
+        CloseHandle(inputWrite);
+        CloseHandle(outputRead);
+        if (d->pty)
+            g_closePseudoConsole(d->pty);
+        d->inputWrite = nullptr;
+        d->outputRead = nullptr;
+        d->pty = nullptr;
+        delete d;
+        d = nullptr;
+        return false;
+    };
 
     SIZE_T attributeSize = 0;
     InitializeProcThreadAttributeList(nullptr, 1, 0, &attributeSize);
@@ -301,23 +323,14 @@ bool PtyProcess::start(const QString &program, const QStringList &args,
         static_cast<LPPROC_THREAD_ATTRIBUTE_LIST>(HeapAlloc(GetProcessHeap(), 0, attributeSize));
     if (!startup.lpAttributeList
         || !InitializeProcThreadAttributeList(startup.lpAttributeList, 1, 0, &attributeSize)) {
-        m_error = tr("初始化进程属性失败");
-        if (startup.lpAttributeList)
-            HeapFree(GetProcessHeap(), 0, startup.lpAttributeList);
-        CloseHandle(d->inputWrite);
-        CloseHandle(d->outputRead);
-        g_closePseudoConsole(d->pty);
-        d->inputWrite = nullptr;
-        d->outputRead = nullptr;
-        d->pty = nullptr;
-        delete d;
-        d = nullptr;
-        return false;
+        return abortStart(tr("初始化进程属性失败（错误码 %1）").arg(int(GetLastError())));
     }
 
-    UpdateProcThreadAttribute(startup.lpAttributeList, 0,
-                              PROC_THREAD_ATTRIBUTE_PSEUDOCONSOLE, d->pty,
-                              sizeof(d->pty), nullptr, nullptr);
+    if (!UpdateProcThreadAttribute(startup.lpAttributeList, 0,
+                                   PROC_THREAD_ATTRIBUTE_PSEUDOCONSOLE, d->pty,
+                                   sizeof(d->pty), nullptr, nullptr)) {
+        return abortStart(tr("把伪终端挂到子进程失败（错误码 %1）").arg(int(GetLastError())));
+    }
 
     QString commandLine = quoteArgument(program);
     for (const QString &argument : args)
@@ -336,18 +349,22 @@ bool PtyProcess::start(const QString &program, const QStringList &args,
 
     DeleteProcThreadAttributeList(startup.lpAttributeList);
     HeapFree(GetProcessHeap(), 0, startup.lpAttributeList);
+    startup.lpAttributeList = nullptr;
 
     if (!created2) {
-        m_error = tr("无法启动 %1（错误码 %2）").arg(program).arg(int(GetLastError()));
-        CloseHandle(d->inputWrite);
-        CloseHandle(d->outputRead);
-        g_closePseudoConsole(d->pty);
-        d->inputWrite = nullptr;
-        d->outputRead = nullptr;
-        d->pty = nullptr;
-        delete d;
-        d = nullptr;
-        return false;
+        const DWORD error = GetLastError();
+        return abortStart(tr("无法启动 %1（错误码 %2）").arg(program).arg(int(error)));
+    }
+
+    // The client owns its own copy of the console ends now, so the ones handed
+    // to CreatePseudoConsole are no longer needed. Closing them earlier made
+    // Windows fall back to the parent console ("stdin is not a terminal").
+    CloseHandle(inputRead);
+    CloseHandle(outputWrite);
+
+    if (debugPty) {
+        qDebug() << "[pty] conpty" << d->pty << "pid" << processInfo.dwProcessId
+                 << "cmd" << commandLine;
     }
 
     CloseHandle(processInfo.hThread);
