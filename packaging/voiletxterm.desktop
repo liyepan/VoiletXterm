@@ -1,0 +1,11 @@
+[Desktop Entry]
+Type=Application
+Name=VoiletXterm
+GenericName=Terminal
+Comment=SSH / Telnet / serial terminal with its own VT100/xterm engine
+Exec=voiletxterm %F
+Icon=voiletxterm
+Terminal=false
+Categories=System;TerminalEmulator;
+Keywords=terminal;ssh;telnet;serial;console;pty;network;
+StartupWMClass=voiletxterm

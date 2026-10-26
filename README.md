@@ -107,6 +107,27 @@ SSH 客户端最难的不是握手，而是把密钥、agent、跳板、known_ho
 **宽字符对齐**
 默认字体优先选半角/全角宽度严格 1:2 的字体（Sarasa Mono SC、文泉驿等宽正黑），这样 `中` 正好占两格；找不到再退回 DejaVu Sans Mono。
 
+## 打包
+
+版本号写在 `VoiletXterm.pro` 的 `VERSION` 里，下面这些脚本会读它。
+
+| 平台 | 产物 | 入口 |
+| --- | --- | --- |
+| Linux | `.deb` / `.rpm` | `packaging/build-deb.sh`、`packaging/build-rpm.sh` |
+| Windows | NSIS 安装包 + 便携 zip | `packaging/windows/installer.nsi` + `windeployqt` |
+| macOS | `.dmg`（arm64 / x86_64） | `packaging/macos/build-dmg.sh` + `bundle-libs.sh` |
+
+Linux 本地打包：
+
+```bash
+mkdir -p build && cd build
+qmake ../VoiletXterm.pro CONFIG+=release && make -j$(nproc)
+make install INSTALL_ROOT="$PWD/stage"
+cd .. && ./packaging/build-deb.sh build/stage 0.1.0 amd64 dist
+```
+
+CI 在 `.github/workflows/package.yml`：推 `main` 或打 `v*` tag 时四个平台并行构建，最后汇总挂到 GitHub Release（附 `SHA256SUMS`）。GitHub 之外（比如 Gitea）会自动跳过所有 job。
+
 ## 已知限制
 
 - Windows 上 ConPTY 与管道两套后端都已实测；ConPTY 不可用时自动退回管道（后者远端尺寸固定）

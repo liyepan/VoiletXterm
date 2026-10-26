@@ -1,9 +1,26 @@
 QT += core gui widgets network serialport
 
-TARGET = voiletxterm
+VERSION = 0.1.0
 TEMPLATE = app
+
+# Linux/Windows keep the lowercase command name; macOS needs a proper bundle.
+macx {
+    TARGET = VoiletXterm
+    ICON = packaging/voiletxterm.icns
+    QMAKE_TARGET_BUNDLE_PREFIX = com.liyepan
+    QMAKE_INFO_PLIST = packaging/macos/Info.plist
+} else {
+    TARGET = voiletxterm
+}
+
+win32: RC_ICONS = packaging/voiletxterm.ico
+
+QMAKE_TARGET_COMPANY = liyepan
+QMAKE_TARGET_PRODUCT = VoiletXterm
+QMAKE_TARGET_DESCRIPTION = "SSH / Telnet / serial terminal"
+QMAKE_TARGET_COPYRIGHT = MIT
+
 CONFIG += c++17 warn_on
-CONFIG -= app_bundle
 
 DEFINES += QT_DEPRECATED_WARNINGS
 
@@ -51,3 +68,13 @@ HEADERS += \
     src/ui/ThemeManager.h
 
 unix: LIBS += -lutil
+
+# Linux packaging: make install INSTALL_ROOT=<dir> stages /usr/bin + desktop entry.
+unix:!macx {
+    target.path = /usr/bin
+    desktop.files = packaging/voiletxterm.desktop
+    desktop.path = /usr/share/applications
+    icon.files = packaging/voiletxterm.png
+    icon.path = /usr/share/icons/hicolor/256x256/apps
+    INSTALLS += target desktop icon
+}
