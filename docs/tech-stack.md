@@ -9,7 +9,7 @@
 | --- | --- |
 | UI 框架 | Qt 5.15 + qmake（Widgets，不用 QML） |
 | 终端渲染 | 自研 `QWidget` + `QPainter`（Konsole 路线），抽象出 `Screen`/`VtParser` |
-| SSH | 系统 `ssh` + `forkpty`，不自研协议 |
+| SSH | 系统 `ssh`；POSIX 用 `forkpty`，Windows 用管道 + `ssh -tt` |
 | Telnet | 自研 IAC 协商，`QTcpSocket` |
 | 串口 | `QSerialPort` |
 | 范围 | 只做 SSH / Telnet / 串口 |
@@ -41,6 +41,18 @@ qtermwidget 是 GPL-2.0，会传染整个项目，因此排除——这也是自
 | QWebEngineView + xterm.js | 包体 +80MB，内存翻倍，等于把 Electron 装进 Qt |
 | 内嵌 libssh2/libssh | 协议之外的配置成本极高，C 实现的攻击面也更大 |
 | QSsh（Qt Creator 内部库） | 非公开模块，无 API 稳定性承诺，功能覆盖不足 |
+
+## Windows 上的伪终端（实测记录）
+
+两条后端都实现了，最终选择如下：
+
+| 后端 | 状态 | 现象 |
+| --- | --- | --- |
+| 管道 + `ssh -tt` | **默认** | 子进程标准输出经 QProcess 管道回到界面，稳定可用；代价是远端终端尺寸固定（ssh 没有本地 tty 时按默认尺寸申请） |
+| ConPTY（`--conpty`） | 实验性 | `CreatePseudoConsole` 返回成功、子进程也挂上了控制台（收到它 56 字节的初始化序列，含 ssh.exe 的窗口标题），但子进程的标准输出仍写向父进程的 stdout，界面收不到任何数据 |
+| ConPTY + 继承父 stdout | 已排除 | 早期版本在 `CreateProcess` 之前关闭 pty 侧管道句柄，会退化成继承父控制台，ssh 报 "stdin is not a terminal"；调整关闭时机后仍不解决 |
+
+结论：Windows 上暂时用管道方案保证可用，ConPTY 的问题留作后续专项。真正的无损方案（包括窗口尺寸随窗口变化）需要让 ConPTY 正确接管子进程的标准句柄。
 
 ## 后果
 

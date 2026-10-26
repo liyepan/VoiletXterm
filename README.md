@@ -107,8 +107,9 @@ SSH 客户端最难的不是握手，而是把密钥、agent、跳板、known_ho
 
 ## 已知限制
 
-- Linux 上完整验证；macOS 用 `util.h` 的 `forkpty`，未实机测试；Windows 走 ConPTY（Win10 1809+），代码已就绪但未在真机验证
-- Windows 上没有 ConPTY 的系统（Win7/8）会直接提示不支持，不会静默失败
+- Windows 已实测可用（SSH 走管道 + `ssh -tt`），但**远端终端尺寸固定**（默认 80×24），拖动窗口不会重排
+- ConPTY 后端已实现但默认关闭（`--conpty`）：实测中它挂上了控制台，却没把子进程的标准输出接到我们的管道
+- macOS 用 `util.h` 的 `forkpty`，未实机测试
 - 没有 SFTP 文件面板、没有 X11 转发、没有 RDP（MobaXterm 的那部分不在当前范围）
 - 没有标签内搜索、没有分屏
 - SSH 密码登录在终端里交互，不经过独立密码框
