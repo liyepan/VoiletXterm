@@ -39,6 +39,8 @@ public:
     QString baseFontFamily() const { return m_fontFamily; }
     void setBaseFontSize(int points);
     int baseFontSize() const { return m_fontSize; }
+    void setBaseFontWeight(int weight);
+    int baseFontWeight() const { return m_fontWeight; }
 
     QSize sizeHint() const override;
 
@@ -129,6 +131,7 @@ private:
 
     QString m_fontFamily;
     int m_fontSize = 11;
+    int m_fontWeight = QFont::Normal;
     QFont m_fonts[4];   // normal, bold, italic, bold+italic
     qreal m_cellWidth = 8;
     qreal m_cellHeight = 16;

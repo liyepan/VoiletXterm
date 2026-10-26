@@ -14,6 +14,7 @@
 #include <QActionGroup>
 #include <QApplication>
 #include <QCloseEvent>
+#include <QFontDialog>
 #include <QHBoxLayout>
 #include <QLabel>
 #include <QMenuBar>
@@ -165,6 +166,9 @@ void MainWindow::buildActions()
             terminal->zoomOut();
     });
 
+    auto *fontAction = new QAction(tr("字体..."), this);
+    connect(fontAction, &QAction::triggered, this, &MainWindow::chooseFont);
+
     m_zoomResetAction = new QAction(tr("重置字号"), this);
     m_zoomResetAction->setShortcut(QKeySequence(QStringLiteral("Ctrl+0")));
     connect(m_zoomResetAction, &QAction::triggered, this, [this] {
@@ -194,6 +198,7 @@ void MainWindow::buildActions()
     editMenu->addAction(m_pasteAction);
 
     QMenu *viewMenu = menuBar()->addMenu(tr("视图"));
+    viewMenu->addAction(fontAction);
     viewMenu->addAction(m_zoomInAction);
     viewMenu->addAction(m_zoomOutAction);
     viewMenu->addAction(m_zoomResetAction);
@@ -286,6 +291,17 @@ void MainWindow::openSession(const SessionSpec &spec)
     TerminalWidget *widget = terminal;
     widget->setTheme(darkTheme());
 
+    QSettings fontSettings;
+    const QString storedFamily = fontSettings.value(QStringLiteral("font/family")).toString();
+    if (!storedFamily.isEmpty())
+        widget->setBaseFontFamily(storedFamily);
+    const int storedSize = fontSettings.value(QStringLiteral("font/size"), 0).toInt();
+    if (storedSize > 0)
+        widget->setBaseFontSize(storedSize);
+    const int storedWeight = fontSettings.value(QStringLiteral("font/weight"), 0).toInt();
+    if (storedWeight > 0)
+        widget->setBaseFontWeight(storedWeight);
+
     const int index = m_tabs->addTab(widget, spec.displayName());
     m_tabs->setCurrentIndex(index);
     m_stack->setCurrentWidget(m_tabs);
@@ -327,6 +343,35 @@ void MainWindow::openSession(const SessionSpec &spec)
     widget->setTransport(transport);
     widget->setFocus();
     updateStatus();
+}
+
+void MainWindow::chooseFont()
+{
+    QSettings settings;
+    QFont initial(settings.value(QStringLiteral("font/family")).toString(),
+                  settings.value(QStringLiteral("font/size"), 11).toInt());
+    if (initial.family().isEmpty()) {
+        if (TerminalWidget *terminal = currentTerminal())
+            initial = QFont(terminal->baseFontFamily(), terminal->baseFontSize());
+    }
+
+    bool accepted = false;
+    const QFont chosen = QFontDialog::getFont(&accepted, initial, this, tr("选择终端字体"));
+    if (!accepted)
+        return;
+
+    const int size = chosen.pointSize() > 0 ? chosen.pointSize() : 11;
+    settings.setValue(QStringLiteral("font/family"), chosen.family());
+    settings.setValue(QStringLiteral("font/size"), size);
+    settings.setValue(QStringLiteral("font/weight"), int(chosen.weight()));
+
+    for (int i = 0; i < m_tabs->count(); ++i) {
+        if (auto *terminal = qobject_cast<TerminalWidget *>(m_tabs->widget(i))) {
+            terminal->setBaseFontFamily(chosen.family());
+            terminal->setBaseFontSize(size);
+            terminal->setBaseFontWeight(int(chosen.weight()));
+        }
+    }
 }
 
 void MainWindow::closeCurrentTab()

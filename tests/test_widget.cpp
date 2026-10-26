@@ -169,6 +169,27 @@ int main(int argc, char *argv[])
         CHECK(total > 0 && dark * 100 / total > 70);
     }
 
+    // --- glyphs line up with the grid (integer cell metrics) ---
+    {
+        widget.setTheme(darkTheme());
+        widget.parser()->feed("\x1b[2J\x1b[H0123456789");
+        QCoreApplication::processEvents();
+        const QImage grid = widget.grab().toImage();
+        const qreal cw = qreal(widget.viewport()->width()) / widget.screen()->columns();
+        int filled = 0;
+        for (int i = 0; i < 10; ++i) {
+            const QRect cell(int(i * cw), 0, int(cw), int(cellH));
+            int ink = 0;
+            for (int y = cell.top(); y <= cell.bottom() && y < grid.height(); ++y)
+                for (int x = cell.left(); x <= cell.right() && x < grid.width(); ++x)
+                    if (grid.pixelColor(x, y).lightness() > 100)
+                        ++ink;
+            if (ink > 2)
+                ++filled;
+        }
+        CHECK(filled == 10);
+    }
+
     // --- keyboard input is encoded the way a shell expects ---
     {
         RecordingTransport *recorder = new RecordingTransport;

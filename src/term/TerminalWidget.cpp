@@ -30,15 +30,35 @@ namespace {
 QString pickDefaultFontFamily()
 {
     const QStringList available = QFontDatabase().families();
+#if defined(Q_OS_WIN)
+    // Cascadia ships with Windows Terminal, Consolas with every Windows.
+    const QStringList preferred = {
+        QStringLiteral("Cascadia Mono"),
+        QStringLiteral("Cascadia Code"),
+        QStringLiteral("Consolas"),
+        QStringLiteral("Sarasa Mono SC"),
+        QStringLiteral("JetBrains Mono"),
+        QStringLiteral("Fira Code"),
+        QStringLiteral("DejaVu Sans Mono"),
+    };
+#elif defined(Q_OS_MACOS)
+    const QStringList preferred = {
+        QStringLiteral("SF Mono"),
+        QStringLiteral("Menlo"),
+        QStringLiteral("Monaco"),
+        QStringLiteral("JetBrains Mono"),
+        QStringLiteral("Sarasa Mono SC"),
+    };
+#else
     const QStringList preferred = {
         QStringLiteral("Sarasa Mono SC"),
+        QStringLiteral("JetBrains Mono"),
         QStringLiteral("WenQuanYi Zen Hei Mono"),
         QStringLiteral("DejaVu Sans Mono"),
-        QStringLiteral("Liberation Mono"),
         QStringLiteral("Noto Sans Mono"),
-        QStringLiteral("Consolas"),
-        QStringLiteral("Menlo"),
+        QStringLiteral("Liberation Mono"),
     };
+#endif
     for (const QString &family : preferred) {
         if (available.contains(family, Qt::CaseInsensitive))
             return family;
@@ -176,6 +196,15 @@ void TerminalWidget::setBaseFontSize(int points)
     updateFonts();
 }
 
+void TerminalWidget::setBaseFontWeight(int weight)
+{
+    weight = std::clamp(weight, int(QFont::Thin), int(QFont::Black));
+    if (weight == m_fontWeight)
+        return;
+    m_fontWeight = weight;
+    updateFonts();
+}
+
 QSize TerminalWidget::sizeHint() const
 {
     return QSize(int(m_cellWidth * 100), int(m_cellHeight * 28));
@@ -186,17 +215,29 @@ void TerminalWidget::updateFonts()
     m_fonts[0] = QFont(m_fontFamily, m_fontSize);
     m_fonts[0].setStyleHint(QFont::Monospace);
     m_fonts[0].setFixedPitch(true);
-    m_fonts[1] = m_fonts[0];
-    m_fonts[1].setBold(true);
+    m_fonts[0].setWeight(m_fontWeight);
     m_fonts[2] = m_fonts[0];
     m_fonts[2].setItalic(true);
+    m_fonts[1] = m_fonts[0];
+    m_fonts[1].setWeight(QFont::Bold);
     m_fonts[3] = m_fonts[1];
     m_fonts[3].setItalic(true);
 
     const QFontMetricsF fm(m_fonts[0]);
-    m_cellWidth = std::max<qreal>(1.0, fm.horizontalAdvance(QLatin1Char('M')));
-    m_cellHeight = std::max<qreal>(1.0, std::floor(fm.height() + 0.5));
-    m_ascent = std::floor(fm.ascent() + 0.5);
+
+    // Snap the grid to whole pixels: with a fractional advance every second
+    // glyph lands on a half pixel and Qt falls back to sub-pixel hinting,
+    // which is what made the text look soft.
+    const qreal advance = fm.horizontalAdvance(QLatin1Char('M'));
+    m_cellWidth = std::max<qreal>(1.0, std::round(advance));
+    m_cellHeight = std::max<qreal>(1.0, std::round(fm.height()));
+    m_ascent = std::round(fm.ascent());
+
+    // Force each glyph to advance exactly one cell, otherwise a run of text
+    // drifts away from the grid and stops lining up with the cursor/selection.
+    const qreal spacing = m_cellWidth - advance;
+    for (QFont &font : m_fonts)
+        font.setLetterSpacing(QFont::AbsoluteSpacing, spacing);
 
     recomputeGeometry();
     viewport()->update();

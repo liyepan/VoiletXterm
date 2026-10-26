@@ -27,6 +27,7 @@ public slots:
 
 private slots:
     void closeCurrentTab();
+    void chooseFont();
     void onCurrentTabChanged(int index);
     void onTabCloseRequested(int index);
     void showAbout();

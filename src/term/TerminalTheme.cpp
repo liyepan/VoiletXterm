@@ -32,8 +32,10 @@ TerminalTheme darkTheme()
 {
     TerminalTheme t;
     t.background = QColor(0x0A, 0x0A, 0x0A);
-    t.foreground = QColor(0xE8, 0xE8, 0xE8);
-    t.cursor = QColor(0xE8, 0xE8, 0xE8);
+    // Slightly brighter than the usual #E8E8E8: on a true black background a
+    // high-value foreground is what gives the text its "lit" look.
+    t.foreground = QColor(0xF5, 0xF5, 0xF5);
+    t.cursor = QColor(0xF5, 0xF5, 0xF5);
     t.cursorText = QColor(0x0A, 0x0A, 0x0A);
     t.selection = QColor(0x26, 0x4F, 0x78);
 
@@ -45,7 +47,7 @@ TerminalTheme darkTheme()
     t.ansi[4] = QColor(0x61, 0xA8, 0xFF);
     t.ansi[5] = QColor(0xD9, 0x8C, 0xD9);
     t.ansi[6] = QColor(0x5F, 0xC7, 0xD0);
-    t.ansi[7] = QColor(0xD8, 0xD8, 0xD8);
+    t.ansi[7] = QColor(0xE6, 0xE6, 0xE6);
 
     t.ansi[8] = QColor(0x7A, 0x7A, 0x7A);
     t.ansi[9] = QColor(0xFF, 0x6B, 0x6B);

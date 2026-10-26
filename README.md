@@ -57,8 +57,9 @@ voiletxterm telnet://192.168.1.1     # 直接 Telnet
 voiletxterm serial:/dev/ttyUSB0@115200
 ```
 
-| 快捷键 | 作用 |
+| 快捷键 / 菜单 | 作用 |
 | --- | --- |
+| 视图 → 字体… | 选字体和字号（会记住） |
 | `Ctrl+Shift+N` | 新建 SSH 会话 |
 | `Ctrl+Shift+W` | 关闭当前标签 |
 | `Ctrl+Shift+C` / `Ctrl+Shift+V` | 复制 / 粘贴 |
