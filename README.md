@@ -72,9 +72,10 @@ voiletxterm serial:/dev/ttyUSB0@115200
 
 | 选项 | 行为 |
 | --- | --- |
-| 跟随系统（默认） | Windows 读注册表 `Personalize\\AppsUseLightTheme`，macOS 读 `defaults read -g AppleInterfaceStyle`，Linux 读 GNOME `color-scheme` / `gtk-theme`；都取不到时按 Qt 调色板亮度兜底 |
+| 跟随系统 | Windows 读注册表 `Personalize\\AppsUseLightTheme`，macOS 读 `defaults read -g AppleInterfaceStyle`，Linux 读 GNOME `color-scheme` / `gtk-theme`；都取不到时按 Qt 调色板亮度兜底 |
 | 按时间自动 | 6:00–18:00 浅色，其余时间深色；每 30 秒复核一次，跨过整点自动切换 |
-| 浅色 / 深色 | 强制其中一种 |
+| 深色（默认） | 黑底白字，终端最舒服的状态 |
+| 浅色 | 白底黑字，强光环境或投影时用 |
 
 命令行可以临时覆盖、不写入配置：
 

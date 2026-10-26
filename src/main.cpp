@@ -100,9 +100,6 @@ int main(int argc, char *argv[])
     Q_UNUSED(pipesOption)
     const char *ptyBackend = "forkpty";
 #endif
-    qInfo().noquote() << "VoiletXterm" << QCoreApplication::applicationVersion()
-                      << "| pty backend:" << ptyBackend;
-
     vx::ThemeManager::instance()->initialize();
 
     // --theme only affects the current run; the saved preference stays intact.
@@ -121,6 +118,11 @@ int main(int argc, char *argv[])
         if (known)
             vx::ThemeManager::instance()->setMode(mode, false);
     }
+
+    qInfo().noquote() << "VoiletXterm" << QCoreApplication::applicationVersion()
+                      << "| pty backend:" << ptyBackend
+                      << "| theme:" << (vx::ThemeManager::instance()->isDark() ? "dark" : "light")
+                      << "| mode:" << int(vx::ThemeManager::instance()->mode());
 
     vx::MainWindow window;
     window.show();

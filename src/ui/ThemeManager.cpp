@@ -53,8 +53,11 @@ ThemeManager *ThemeManager::instance()
 
 void ThemeManager::initialize()
 {
+    // Dark is the default: a terminal is expected to be dark, and following a
+    // light desktop produced an unreadable white terminal for most users.
+    // "跟随系统" is still one menu click away.
     QSettings settings;
-    const int stored = settings.value(QLatin1String(kModeKey), int(System)).toInt();
+    const int stored = settings.value(QLatin1String(kModeKey), int(Dark)).toInt();
     m_mode = Mode(qBound(int(System), stored, int(Dark)));
     reevaluate(true);
 }
