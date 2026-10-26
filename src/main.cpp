@@ -1,6 +1,6 @@
 #include "session/SessionSpec.h"
 #include "ui/MainWindow.h"
-#include "ui/Style.h"
+#include "ui/ThemeManager.h"
 
 #include <QApplication>
 #include <QCommandLineParser>
@@ -70,9 +70,31 @@ int main(int argc, char *argv[])
     parser.setApplicationDescription(QStringLiteral("VoiletXterm - SSH / Telnet / serial terminal"));
     parser.addHelpOption();
     parser.addVersionOption();
+    QCommandLineOption themeOption(
+        QStringLiteral("theme"),
+        QStringLiteral("Colour scheme for this run: system, auto, light or dark."),
+        QStringLiteral("scheme"));
+    parser.addOption(themeOption);
     parser.process(app);
 
-    vx::applyDarkStyle(app);
+    vx::ThemeManager::instance()->initialize();
+
+    // --theme only affects the current run; the saved preference stays intact.
+    if (parser.isSet(themeOption)) {
+        const QString value = parser.value(themeOption).toLower();
+        vx::ThemeManager::Mode mode = vx::ThemeManager::System;
+        bool known = true;
+        if (value == QLatin1String("auto") || value == QLatin1String("schedule"))
+            mode = vx::ThemeManager::Schedule;
+        else if (value == QLatin1String("light"))
+            mode = vx::ThemeManager::Light;
+        else if (value == QLatin1String("dark"))
+            mode = vx::ThemeManager::Dark;
+        else if (value != QLatin1String("system"))
+            known = false;
+        if (known)
+            vx::ThemeManager::instance()->setMode(mode, false);
+    }
 
     vx::MainWindow window;
     window.show();

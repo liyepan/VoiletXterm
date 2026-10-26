@@ -26,7 +26,8 @@ SOURCES += \
     src/ui/MainWindow.cpp \
     src/ui/SessionDialog.cpp \
     src/ui/SessionStore.cpp \
-    src/ui/Style.cpp
+    src/ui/Style.cpp \
+    src/ui/ThemeManager.cpp
 
 HEADERS += \
     src/core/Cell.h \
@@ -46,6 +47,7 @@ HEADERS += \
     src/ui/MainWindow.h \
     src/ui/SessionDialog.h \
     src/ui/SessionStore.h \
-    src/ui/Style.h
+    src/ui/Style.h \
+    src/ui/ThemeManager.h
 
 unix: LIBS += -lutil

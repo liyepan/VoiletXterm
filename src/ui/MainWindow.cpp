@@ -5,9 +5,13 @@
 
 #include "../session/SessionFactory.h"
 #include "../session/Transport.h"
+#include "../term/TerminalTheme.h"
 #include "../term/TerminalWidget.h"
 
+#include "ThemeManager.h"
+
 #include <QAction>
+#include <QActionGroup>
 #include <QApplication>
 #include <QCloseEvent>
 #include <QHBoxLayout>
@@ -54,12 +58,13 @@ QWidget *MainWindow::buildWelcomePage()
     titleFont.setPointSize(titleFont.pointSize() + 16);
     titleFont.setBold(true);
     title->setFont(titleFont);
+    title->setProperty("role", "title");
 
     auto *subtitle = new QLabel(tr("SSH / Telnet / 串口，一个窗口搞定所有远程工作"), page);
-    subtitle->setStyleSheet(QStringLiteral("color: #A29BC0;"));
+    subtitle->setProperty("role", "muted");
 
     auto *hint = new QLabel(tr("快捷键：Ctrl+N 新建 SSH  ·  Ctrl+Shift+C 复制  ·  Ctrl+Shift+V 粘贴  ·  Ctrl+滚轮 缩放"), page);
-    hint->setStyleSheet(QStringLiteral("color: #6B6485;"));
+    hint->setProperty("role", "dim");
 
     auto *row = new QHBoxLayout;
     auto *sshButton = new QPushButton(tr("新建 SSH 会话"), page);
@@ -105,6 +110,14 @@ void MainWindow::buildUi()
 
     connect(m_tabs, &QTabWidget::currentChanged, this, &MainWindow::onCurrentTabChanged);
     connect(m_tabs, &QTabWidget::tabCloseRequested, this, &MainWindow::onTabCloseRequested);
+
+    connect(ThemeManager::instance(), &ThemeManager::schemeChanged, this, [this](bool dark) {
+        const TerminalTheme theme = terminalThemeFor(dark);
+        for (int i = 0; i < m_tabs->count(); ++i) {
+            if (auto *terminal = qobject_cast<TerminalWidget *>(m_tabs->widget(i)))
+                terminal->setTheme(theme);
+        }
+    });
 }
 
 void MainWindow::buildActions()
@@ -182,6 +195,31 @@ void MainWindow::buildActions()
     viewMenu->addAction(m_zoomInAction);
     viewMenu->addAction(m_zoomOutAction);
     viewMenu->addAction(m_zoomResetAction);
+    viewMenu->addSeparator();
+
+    QMenu *themeMenu = viewMenu->addMenu(tr("主题"));
+    auto *themeGroup = new QActionGroup(this);
+    themeGroup->setExclusive(true);
+    const struct {
+        ThemeManager::Mode mode;
+        QString label;
+    } themeItems[] = {
+        {ThemeManager::System, tr("跟随系统")},
+        {ThemeManager::Schedule, tr("按时间自动（6:00–18:00 浅色）")},
+        {ThemeManager::Light, tr("浅色")},
+        {ThemeManager::Dark, tr("深色")},
+    };
+    for (const auto &item : themeItems) {
+        auto *action = new QAction(item.label, this);
+        action->setCheckable(true);
+        action->setData(int(item.mode));
+        action->setChecked(ThemeManager::instance()->mode() == item.mode);
+        themeGroup->addAction(action);
+        themeMenu->addAction(action);
+    }
+    connect(themeGroup, &QActionGroup::triggered, this, [](QAction *action) {
+        ThemeManager::instance()->setMode(ThemeManager::Mode(action->data().toInt()));
+    });
 
     QMenu *helpMenu = menuBar()->addMenu(tr("帮助(&H)"));
     helpMenu->addAction(aboutAction);
@@ -244,6 +282,7 @@ void MainWindow::openSession(const SessionSpec &spec)
 {
     auto *terminal = new TerminalWidget(this);
     TerminalWidget *widget = terminal;
+    widget->setTheme(terminalThemeFor(ThemeManager::instance()->isDark()));
 
     const int index = m_tabs->addTab(widget, spec.displayName());
     m_tabs->setCurrentIndex(index);

@@ -31,4 +31,40 @@ TerminalTheme darkVioletTheme()
     return t;
 }
 
+TerminalTheme lightVioletTheme()
+{
+    TerminalTheme t;
+    t.background = QColor(0xFB, 0xFA, 0xFF);
+    t.foreground = QColor(0x2A, 0x25, 0x38);
+    t.cursor = QColor(0x6D, 0x4F, 0xD1);
+    t.cursorText = QColor(0xFB, 0xFA, 0xFF);
+    t.selection = QColor(0xD5, 0xCD, 0xF5);
+
+    // On a light background the "white" slots have to become darker greys,
+    // otherwise bright text would disappear.
+    t.ansi[0] = QColor(0x2A, 0x25, 0x38);
+    t.ansi[1] = QColor(0xC0, 0x39, 0x2B);
+    t.ansi[2] = QColor(0x2E, 0x7D, 0x32);
+    t.ansi[3] = QColor(0x9A, 0x6E, 0x00);
+    t.ansi[4] = QColor(0x2A, 0x5F, 0xC2);
+    t.ansi[5] = QColor(0x8E, 0x3D, 0xB8);
+    t.ansi[6] = QColor(0x0E, 0x7C, 0x86);
+    t.ansi[7] = QColor(0x8A, 0x84, 0x9B);
+
+    t.ansi[8] = QColor(0x6B, 0x64, 0x85);
+    t.ansi[9] = QColor(0xE0, 0x4B, 0x3C);
+    t.ansi[10] = QColor(0x3C, 0x9A, 0x42);
+    t.ansi[11] = QColor(0xB8, 0x86, 0x00);
+    t.ansi[12] = QColor(0x3A, 0x77, 0xE0);
+    t.ansi[13] = QColor(0xA8, 0x54, 0xD0);
+    t.ansi[14] = QColor(0x18, 0x96, 0xA0);
+    t.ansi[15] = QColor(0x4A, 0x45, 0x58);
+    return t;
+}
+
+TerminalTheme terminalThemeFor(bool dark)
+{
+    return dark ? darkVioletTheme() : lightVioletTheme();
+}
+
 } // namespace vx

@@ -14,5 +14,9 @@ struct TerminalTheme {
 };
 
 TerminalTheme darkVioletTheme();
+TerminalTheme lightVioletTheme();
+
+// Convenience helper used by the UI layer.
+TerminalTheme terminalThemeFor(bool dark);
 
 } // namespace vx

@@ -7,6 +7,7 @@
 #include <cstdio>
 
 #include "session/Transport.h"
+#include "ui/Style.h"
 
 #include "core/Screen.h"
 #include "core/VtParser.h"
@@ -133,6 +134,23 @@ int main(int argc, char *argv[])
     QImage selectionImage = widget.grab().toImage();
     CHECK(countNear(selectionImage, selectionImage.rect(), theme.selection, 30) > 500);
 
+    // --- the light scheme paints a light background with dark ink ---
+    {
+        widget.setTheme(lightVioletTheme());
+        widget.parser()->feed("\r\nlight theme sample");
+        QCoreApplication::processEvents();
+        const QImage lightImage = widget.grab().toImage();
+        const QColor corner = lightImage.pixelColor(4, 4);
+        CHECK(corner.lightness() > 180);
+        int darkPixels = 0;
+        for (int y = 0; y < lightImage.height(); y += 3)
+            for (int x = 0; x < lightImage.width(); x += 3)
+                if (lightImage.pixelColor(x, y).lightness() < 90)
+                    ++darkPixels;
+        CHECK(darkPixels > 20);
+        widget.setTheme(darkVioletTheme());
+    }
+
     // --- keyboard input is encoded the way a shell expects ---
     {
         RecordingTransport *recorder = new RecordingTransport;
@@ -176,6 +194,18 @@ int main(int argc, char *argv[])
         widget.parser()->feed("line\r\n");
     QCoreApplication::processEvents();
     CHECK(widget.screen()->historyCount() > 0);
+
+    // --- the application palette really switches between schemes ---
+    {
+        applyStyle(true);
+        CHECK(qApp->palette().color(QPalette::Window).lightness() < 80);
+        CHECK(!qApp->styleSheet().contains(QLatin1Char('@'))); // no unresolved tokens
+
+        applyStyle(false);
+        CHECK(qApp->palette().color(QPalette::Window).lightness() > 180);
+        CHECK(!qApp->styleSheet().contains(QLatin1Char('@')));
+        CHECK(qApp->styleSheet().contains(QStringLiteral("#FFFFFF")));
+    }
 
     if (g_failures == 0)
         std::printf("widget render checks passed (%dx%d cells, %.1fx%.1f px)\n", cols, rows,

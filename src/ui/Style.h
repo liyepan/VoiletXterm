@@ -1,9 +1,8 @@
 #pragma once
 
-class QApplication;
-
 namespace vx {
 
-void applyDarkStyle(QApplication &app);
+// Installs the application palette and stylesheet for the requested scheme.
+void applyStyle(bool dark);
 
 } // namespace vx

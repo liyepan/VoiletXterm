@@ -5,6 +5,7 @@ TARGET = vx_widget_test
 TEMPLATE = app
 INCLUDEPATH += ../src
 SOURCES += test_widget.cpp \
+    ../src/ui/Style.cpp \
     ../src/core/Screen.cpp \
     ../src/core/CharWidth.cpp \
     ../src/core/Palette.cpp \
