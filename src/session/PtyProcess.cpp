@@ -1,3 +1,16 @@
+// MinGW defaults _WIN32_WINNT to 0x0502 (Windows XP), which hides every
+// Vista+ declaration in <windows.h> - including STARTUPINFOEXW and the process
+// attribute list API used below. This must happen before any header is pulled
+// in, otherwise <windows.h> is already parsed with the old gate.
+#if defined(_WIN32) || defined(__MINGW32__)
+#ifndef _WIN32_WINNT
+#define _WIN32_WINNT 0x0601
+#endif
+#ifndef WINVER
+#define WINVER 0x0601
+#endif
+#endif
+
 #include "PtyProcess.h"
 
 #include <QSocketNotifier>
@@ -20,9 +33,28 @@
 #include <thread>
 #include <vector>
 
-// Older mingw-w64 headers do not know the ConPTY attribute.
+// ConPTY attributes are Windows 10 only; older SDK headers never declare them.
 #ifndef PROC_THREAD_ATTRIBUTE_PSEUDOCONSOLE
 #define PROC_THREAD_ATTRIBUTE_PSEUDOCONSOLE ((DWORD_PTR)0x00020016)
+#endif
+
+// Belt and braces: if a toolchain still ends up with _WIN32_WINNT < 0x0600,
+// declare the process attribute list API ourselves instead of failing to build.
+#if !defined(_WIN32_WINNT) || (_WIN32_WINNT < 0x0600)
+typedef struct _PROC_THREAD_ATTRIBUTE_LIST *PPROC_THREAD_ATTRIBUTE_LIST;
+typedef PPROC_THREAD_ATTRIBUTE_LIST LPPROC_THREAD_ATTRIBUTE_LIST;
+typedef struct _STARTUPINFOEXW {
+    STARTUPINFOW StartupInfo;
+    LPPROC_THREAD_ATTRIBUTE_LIST lpAttributeList;
+} STARTUPINFOEXW, *LPSTARTUPINFOEXW;
+#ifndef EXTENDED_STARTUPINFO_PRESENT
+#define EXTENDED_STARTUPINFO_PRESENT 0x00080000
+#endif
+extern "C" {
+WINBASEAPI BOOL WINAPI InitializeProcThreadAttributeList(LPPROC_THREAD_ATTRIBUTE_LIST, DWORD, DWORD, PSIZE_T);
+WINBASEAPI BOOL WINAPI UpdateProcThreadAttribute(LPPROC_THREAD_ATTRIBUTE_LIST, DWORD, DWORD_PTR, PVOID, SIZE_T, PVOID, PSIZE_T);
+WINBASEAPI VOID WINAPI DeleteProcThreadAttributeList(LPPROC_THREAD_ATTRIBUTE_LIST);
+}
 #endif
 
 #else // Q_OS_UNIX
@@ -62,6 +94,17 @@ ResizePseudoConsoleFn g_resizePseudoConsole = nullptr;
 ClosePseudoConsoleFn g_closePseudoConsole = nullptr;
 bool g_conPtyChecked = false;
 
+// Function pointer <-> data pointer casts are not portable in C++; round trip
+// them through memcpy so the code stays warning clean.
+template <typename FunctionPointer>
+FunctionPointer resolveSymbol(HMODULE module, const char *name)
+{
+    FARPROC symbol = GetProcAddress(module, name);
+    FunctionPointer result = nullptr;
+    std::memcpy(&result, &symbol, sizeof(result));
+    return result;
+}
+
 bool loadConPty()
 {
     if (g_conPtyChecked)
@@ -72,12 +115,9 @@ bool loadConPty()
     if (!kernel)
         return false;
 
-    g_createPseudoConsole =
-        reinterpret_cast<CreatePseudoConsoleFn>(GetProcAddress(kernel, "CreatePseudoConsole"));
-    g_resizePseudoConsole =
-        reinterpret_cast<ResizePseudoConsoleFn>(GetProcAddress(kernel, "ResizePseudoConsole"));
-    g_closePseudoConsole =
-        reinterpret_cast<ClosePseudoConsoleFn>(GetProcAddress(kernel, "ClosePseudoConsole"));
+    g_createPseudoConsole = resolveSymbol<CreatePseudoConsoleFn>(kernel, "CreatePseudoConsole");
+    g_resizePseudoConsole = resolveSymbol<ResizePseudoConsoleFn>(kernel, "ResizePseudoConsole");
+    g_closePseudoConsole = resolveSymbol<ClosePseudoConsoleFn>(kernel, "ClosePseudoConsole");
 
     if (!g_createPseudoConsole || !g_resizePseudoConsole || !g_closePseudoConsole) {
         g_createPseudoConsole = nullptr;
