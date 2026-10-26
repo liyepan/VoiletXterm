@@ -139,6 +139,23 @@ void TerminalWidget::setTheme(const TerminalTheme &theme)
         m_palette[i] = QColor::fromRgb(QRgb(0xFF000000u | defaultPaletteColor(i)));
     for (int i = 0; i < 16; ++i)
         m_palette[i] = m_theme.ansi[i];
+
+    // The UI stylesheet may be light while the terminal stays dark, so the
+    // scrollbar living inside the terminal gets its own colours.
+    const auto blend = [&theme](qreal ratio) {
+        const auto mix = [ratio](int fg, int bg) { return int(fg * ratio + bg * (1.0 - ratio)); };
+        return QColor(mix(theme.foreground.red(), theme.background.red()),
+                      mix(theme.foreground.green(), theme.background.green()),
+                      mix(theme.foreground.blue(), theme.background.blue()));
+    };
+    verticalScrollBar()->setStyleSheet(
+        QStringLiteral("QScrollBar:vertical { background: transparent; width: 11px; margin: 0; }"
+                       "QScrollBar::handle:vertical { background: %1; border-radius: 5px; min-height: 24px; }"
+                       "QScrollBar::handle:vertical:hover { background: %2; }"
+                       "QScrollBar::add-line:vertical, QScrollBar::sub-line:vertical { height: 0; }"
+                       "QScrollBar::add-page:vertical, QScrollBar::sub-page:vertical { background: transparent; }")
+            .arg(blend(0.30).name(), blend(0.50).name()));
+
     viewport()->update();
 }
 

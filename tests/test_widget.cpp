@@ -151,6 +151,24 @@ int main(int argc, char *argv[])
         widget.setTheme(darkTheme());
     }
 
+    // --- a light UI must not repaint the terminal white ---
+    {
+        applyStyle(false); // light application chrome
+        widget.setTheme(darkTheme());
+        QCoreApplication::processEvents();
+        const QImage themed = widget.grab().toImage();
+        int dark = 0;
+        int total = 0;
+        for (int y = 0; y < themed.height(); y += 7) {
+            for (int x = 0; x < themed.width(); x += 7) {
+                ++total;
+                if (themed.pixelColor(x, y).lightness() < 40)
+                    ++dark;
+            }
+        }
+        CHECK(total > 0 && dark * 100 / total > 70);
+    }
+
     // --- keyboard input is encoded the way a shell expects ---
     {
         RecordingTransport *recorder = new RecordingTransport;

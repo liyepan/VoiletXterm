@@ -28,7 +28,7 @@ MobaXterm 很好用，但只跑 Windows、源码闭源。VoiletXterm 只做三�
 - 多标签会话，标签标题跟随远端 `OSC 0/2` 标题
 - 会话保存与复用（QSettings 持久化），新建/编辑/删除
 - 命令行直达：`voiletxterm user@host:22` / `telnet://host:port` / `serial:/dev/ttyUSB0@115200`
-- 浅色 / 深色两套主题，可跟随系统或按时间自动切换（见下文），Ctrl+滚轮缩放字号
+- 界面有浅色 / 深色两套主题（可跟随系统或按时间自动切换），**终端始终黑底白字**，Ctrl+滚轮缩放字号
 
 ## 构建
 
@@ -74,8 +74,10 @@ voiletxterm serial:/dev/ttyUSB0@115200
 | --- | --- |
 | 跟随系统 | Windows 读注册表 `Personalize\\AppsUseLightTheme`，macOS 读 `defaults read -g AppleInterfaceStyle`，Linux 读 GNOME `color-scheme` / `gtk-theme`；都取不到时按 Qt 调色板亮度兜底 |
 | 按时间自动 | 6:00–18:00 浅色，其余时间深色；每 30 秒复核一次，跨过整点自动切换 |
-| 深色（默认） | 黑底白字，终端最舒服的状态 |
+| 深色（默认） | 深灰底白字 |
 | 浅色 | 白底黑字，强光环境或投影时用 |
+
+> 主题只影响界面外壳（标签、工具栏、对话框）。终端本身固定用黑底白字，浅色界面下也不会变成白底——白色终端长时间盯着太难受。
 
 命令行可以临时覆盖、不写入配置：
 

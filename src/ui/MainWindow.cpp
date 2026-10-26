@@ -111,8 +111,9 @@ void MainWindow::buildUi()
     connect(m_tabs, &QTabWidget::currentChanged, this, &MainWindow::onCurrentTabChanged);
     connect(m_tabs, &QTabWidget::tabCloseRequested, this, &MainWindow::onTabCloseRequested);
 
-    connect(ThemeManager::instance(), &ThemeManager::schemeChanged, this, [this](bool dark) {
-        const TerminalTheme theme = terminalThemeFor(dark);
+    // The UI scheme changes; the terminal stays dark on purpose.
+    connect(ThemeManager::instance(), &ThemeManager::schemeChanged, this, [this](bool) {
+        const TerminalTheme theme = darkTheme();
         for (int i = 0; i < m_tabs->count(); ++i) {
             if (auto *terminal = qobject_cast<TerminalWidget *>(m_tabs->widget(i)))
                 terminal->setTheme(theme);
@@ -283,7 +284,7 @@ void MainWindow::openSession(const SessionSpec &spec)
 {
     auto *terminal = new TerminalWidget(this);
     TerminalWidget *widget = terminal;
-    widget->setTheme(terminalThemeFor(ThemeManager::instance()->isDark()));
+    widget->setTheme(darkTheme());
 
     const int index = m_tabs->addTab(widget, spec.displayName());
     m_tabs->setCurrentIndex(index);

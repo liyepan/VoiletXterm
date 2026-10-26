@@ -88,9 +88,6 @@ TerminalTheme lightTheme()
     return t;
 }
 
-TerminalTheme terminalThemeFor(bool dark)
-{
-    return dark ? darkTheme() : lightTheme();
-}
+
 
 } // namespace vx
