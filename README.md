@@ -44,7 +44,9 @@ make -j$(nproc)
 
 串口需要读写权限，通常把用户加进 `dialout` 组：`sudo usermod -aG dialout $USER`。
 
-Windows 直接用 Qt Creator 打开 `VoiletXterm.pro`（Kit 选 Desktop Qt 5.15.2 MinGW 64-bit）即可编译。SSH 走 ConPTY，需要 **Windows 10 1809 及以上**，并且 PATH 里要有 OpenSSH 客户端（`ssh.exe`，Win10/11 默认自带）。
+Windows 直接用 Qt Creator 打开 `VoiletXterm.pro`（Kit 选 Desktop Qt 5.15.2 MinGW 64-bit）即可编译。PATH 里需要有 OpenSSH 客户端（`ssh.exe`，Win10/11 默认自带）。
+
+Windows 上的 SSH 默认走**管道 + `ssh -tt`**：远端会分配伪终端，输出经管道回到界面。代价是**远端终端尺寸固定**（ssh 在没有本地 tty 时按 80×24 申请），拖动窗口不会重排。ConPTY 后端已经写好但默认关闭（`--conpty` 可试验），因为在实测中它没能把子进程的标准输出接到我们的管道上。
 
 ## 使用
 

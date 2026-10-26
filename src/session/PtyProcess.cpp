@@ -14,6 +14,8 @@
 #include "PtyProcess.h"
 
 #include <QDebug>
+#include <QProcess>
+#include <QProcessEnvironment>
 #include <QSocketNotifier>
 #include <QTimer>
 
@@ -233,6 +235,20 @@ bool isExecutableOnPath(const QString &program)
 
 #endif
 
+namespace {
+bool g_useConPty = false;
+}
+
+void PtyProcess::setUseConPty(bool enabled)
+{
+    g_useConPty = enabled;
+}
+
+bool PtyProcess::useConPty()
+{
+    return g_useConPty;
+}
+
 PtyProcess::PtyProcess(QObject *parent)
     : QObject(parent)
 {
@@ -248,8 +264,21 @@ bool PtyProcess::start(const QString &program, const QStringList &args,
 {
 #ifdef Q_OS_WIN
 
-    if (d)
+    if (d || m_pipeProcess)
         return false;
+
+    m_program = program;
+    m_args = args;
+    m_environment = environment;
+
+    // Default on Windows: plain pipes plus "ssh -tt". ConPTY attaches a
+    // console but does not reliably give the child our pipe handles, which
+    // leaves ssh writing into the parent's stdout.
+    if (!g_useConPty) {
+        startPipeFallback();
+        return true;
+    }
+
     if (!loadConPty()) {
         m_error = tr("当前系统不支持 ConPTY，需要 Windows 10 1809 或更新版本");
         return false;
@@ -392,6 +421,14 @@ bool PtyProcess::start(const QString &program, const QStringList &args,
                           << "child on parent console=" << childOnParentConsole;
     });
 
+    QTimer::singleShot(2500, this, [this] {
+        if (m_finished || !d || m_totalBytes > 64)
+            return;
+        qWarning().noquote() << "[pty] ConPTY delivered nothing, switching to pipes";
+        teardownConPty();
+        startPipeFallback();
+    });
+
     // A blocking ReadFile cannot be cancelled cleanly, so the reader polls the
     // pipe instead; 4 ms is well below the perceptible latency of a terminal.
     d->reader = std::thread([this] {
@@ -518,6 +555,78 @@ void PtyProcess::onReadable()
 #endif
 }
 
+void PtyProcess::teardownConPty()
+{
+#ifdef Q_OS_WIN
+    if (!d)
+        return;
+    d->stop = true;
+    if (d->reader.joinable())
+        d->reader.join();
+    if (d->inputWrite) {
+        CloseHandle(d->inputWrite);
+        d->inputWrite = nullptr;
+    }
+    if (d->outputRead) {
+        CloseHandle(d->outputRead);
+        d->outputRead = nullptr;
+    }
+    if (d->process) {
+        TerminateProcess(d->process, 0);
+        CloseHandle(d->process);
+        d->process = nullptr;
+    }
+    if (d->pty) {
+        g_closePseudoConsole(d->pty);
+        d->pty = nullptr;
+    }
+    delete d;
+    d = nullptr;
+#endif
+}
+
+void PtyProcess::startPipeFallback()
+{
+#ifdef Q_OS_WIN
+    if (m_pipeProcess)
+        return;
+
+    m_pipeProcess = new QProcess(this);
+    m_pipeProcess->setProcessChannelMode(QProcess::MergedChannels);
+
+    QProcessEnvironment environment = QProcessEnvironment::systemEnvironment();
+    environment.insert(QStringLiteral("TERM"), QStringLiteral("xterm-256color"));
+    environment.insert(QStringLiteral("COLORTERM"), QStringLiteral("truecolor"));
+    environment.insert(QStringLiteral("TERM_PROGRAM"), QStringLiteral("VoiletXterm"));
+    for (auto it = m_environment.constBegin(); it != m_environment.constEnd(); ++it)
+        environment.insert(it.key(), it.value());
+    m_pipeProcess->setEnvironment(environment);
+
+    connect(m_pipeProcess, &QProcess::readyReadStandardOutput, this, [this] {
+        const QByteArray chunk = m_pipeProcess->readAllStandardOutput();
+        if (chunk.isEmpty())
+            return;
+        m_totalBytes += chunk.size();
+        if (!m_loggedFirstData) {
+            m_loggedFirstData = true;
+            qInfo().noquote() << "[pty] first data" << chunk.size() << "bytes:"
+                              << chunk.left(120).toPercentEncoding();
+        }
+        emit dataRead(chunk);
+    });
+    connect(m_pipeProcess, &QProcess::finished, this, [this](int exitCode, QProcess::ExitStatus) {
+        finish(exitCode, tr("会话已结束"));
+    });
+    connect(m_pipeProcess, &QProcess::errorOccurred, this, [this](QProcess::ProcessError error) {
+        if (error == QProcess::FailedToStart)
+            finish(-1, tr("无法启动 %1").arg(m_program));
+    });
+
+    qInfo().noquote() << "[pty] pipe backend |" << m_program << m_args.join(QLatin1Char(' '));
+    m_pipeProcess->start(m_program, m_args);
+#endif
+}
+
 void PtyProcess::write(const QByteArray &data)
 {
     if (data.isEmpty())
@@ -525,6 +634,11 @@ void PtyProcess::write(const QByteArray &data)
 
 #ifdef Q_OS_WIN
 
+    if (m_pipeProcess) {
+        if (m_pipeProcess->state() == QProcess::Running)
+            m_pipeProcess->write(data);
+        return;
+    }
     if (!d || !d->inputWrite)
         return;
     const char *cursor = data.constData();
@@ -579,6 +693,8 @@ void PtyProcess::onWritable()
 void PtyProcess::setWindowSize(int cols, int rows)
 {
 #ifdef Q_OS_WIN
+    if (m_pipeProcess)
+        return;
     if (d && d->pty) {
         COORD size;
         size.X = static_cast<SHORT>(std::max(1, cols));
@@ -623,6 +739,16 @@ void PtyProcess::finish(int exitCode, const QString &reason)
     m_finished = true;
 
 #ifdef Q_OS_WIN
+
+    if (m_pipeProcess) {
+        m_pipeProcess->disconnect(this);
+        if (m_pipeProcess->state() != QProcess::NotRunning)
+            m_pipeProcess->kill();
+        m_pipeProcess->deleteLater();
+        m_pipeProcess = nullptr;
+        emit closed(exitCode, reason);
+        return;
+    }
 
     if (d) {
         // Ask the reader to exit before any handle is closed under its feet.
@@ -677,8 +803,20 @@ void PtyProcess::stop()
 {
 #ifdef Q_OS_WIN
 
-    if (!d)
+    if (m_pipeProcess) {
+        m_pipeProcess->disconnect(this);
+        if (m_pipeProcess->state() != QProcess::NotRunning) {
+            m_pipeProcess->kill();
+            m_pipeProcess->waitForFinished(500);
+        }
+        m_pipeProcess->deleteLater();
+        m_pipeProcess = nullptr;
+    }
+
+    if (!d) {
+        m_finished = true;
         return;
+    }
     d->stop = true;
     if (d->reader.joinable())
         d->reader.join();
@@ -726,6 +864,8 @@ void PtyProcess::stop()
 bool PtyProcess::isRunning() const
 {
 #ifdef Q_OS_WIN
+    if (m_pipeProcess)
+        return m_pipeProcess->state() == QProcess::Running;
     return d != nullptr && d->process != nullptr;
 #else
     return m_fd >= 0;
@@ -735,6 +875,8 @@ bool PtyProcess::isRunning() const
 qint64 PtyProcess::processId() const
 {
 #ifdef Q_OS_WIN
+    if (m_pipeProcess)
+        return qint64(m_pipeProcess->processId());
     return d ? qint64(d->pid) : -1;
 #else
     return m_pid;

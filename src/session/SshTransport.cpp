@@ -48,10 +48,14 @@ void SshTransport::buildCommand(QString &program, QStringList &args, QHash<QStri
         : QStringLiteral("%1@%2").arg(m_spec.user, m_spec.host);
     args << target;
 
-    // Always ask for a remote terminal: we are a terminal client. This also
-    // covers the Windows case where ssh fails to detect the ConPTY console as a
-    // tty on its own ("Pseudo-terminal will not be allocated").
+    // Always ask for a remote terminal: we are a terminal client. On Windows
+    // the child runs on plain pipes, so "-tt" is required to force the remote
+    // pty even though stdin is not a local terminal.
+#ifdef Q_OS_WIN
+    args << QStringLiteral("-tt");
+#else
     args << QStringLiteral("-t");
+#endif
 
     if (!m_spec.remoteCommand.trimmed().isEmpty())
         args << m_spec.remoteCommand;

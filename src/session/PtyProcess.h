@@ -5,6 +5,7 @@
 #include <QObject>
 #include <QStringList>
 
+class QProcess;
 class QSocketNotifier;
 
 namespace vx {
@@ -31,6 +32,12 @@ public:
 
     QString errorString() const { return m_error; }
 
+    // Windows: ConPTY does not hand the child's standard handles over to the
+    // pseudo console on every system, so the default backend uses plain pipes
+    // and ssh -tt. Opt into ConPTY explicitly when experimenting.
+    static void setUseConPty(bool enabled);
+    static bool useConPty();
+
 signals:
     void dataRead(const QByteArray &data);
     void closed(int exitCode, const QString &reason);
@@ -44,9 +51,17 @@ private:
     void finish(int exitCode, const QString &reason);
     void closeFd();
 
+    // Windows backend helpers; on other platforms they compile to no-ops.
+    void teardownConPty();
+    void startPipeFallback();
+
 #ifdef Q_OS_WIN
     struct Private;
     Private *d = nullptr;
+    QProcess *m_pipeProcess = nullptr;
+    QString m_program;
+    QStringList m_args;
+    QHash<QString, QString> m_environment;
 #endif
 
     int m_fd = -1;

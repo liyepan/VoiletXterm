@@ -1,3 +1,4 @@
+#include "session/PtyProcess.h"
 #include "session/SessionSpec.h"
 #include "ui/MainWindow.h"
 #include "ui/ThemeManager.h"
@@ -76,11 +77,20 @@ int main(int argc, char *argv[])
         QStringLiteral("Colour scheme for this run: system, auto, light or dark."),
         QStringLiteral("scheme"));
     parser.addOption(themeOption);
+
+    QCommandLineOption conPtyOption(
+        QStringLiteral("conpty"),
+        QStringLiteral("Windows only: use the ConPTY backend instead of pipes (experimental)."));
+    parser.addOption(conPtyOption);
+
     parser.process(app);
 
 #ifdef Q_OS_WIN
-    const char *ptyBackend = "conpty";
+    if (parser.isSet(conPtyOption))
+        vx::PtyProcess::setUseConPty(true);
+    const char *ptyBackend = vx::PtyProcess::useConPty() ? "conpty (experimental)" : "pipes (-tt)";
 #else
+    Q_UNUSED(conPtyOption)
     const char *ptyBackend = "forkpty";
 #endif
     qInfo().noquote() << "VoiletXterm" << QCoreApplication::applicationVersion()
