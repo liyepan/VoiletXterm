@@ -15,6 +15,7 @@
 
 #include <QDebug>
 #include <QSocketNotifier>
+#include <QTimer>
 
 #include <algorithm>
 
@@ -374,6 +375,23 @@ bool PtyProcess::start(const QString &program, const QStringList &args,
     d->process = processInfo.hProcess;
     d->pid = processInfo.dwProcessId;
 
+    // Diagnostics: if the child shows up in the parent console's process list,
+    // the pseudo console was not attached and ssh is talking to the console.
+    QTimer::singleShot(1500, this, [this] {
+        if (!d)
+            return;
+        DWORD pids[128];
+        const DWORD attached = GetConsoleProcessList(pids, sizeof(pids) / sizeof(pids[0]));
+        bool childOnParentConsole = false;
+        for (DWORD i = 0; i < attached && i < 128; ++i) {
+            if (pids[i] == d->pid)
+                childOnParentConsole = true;
+        }
+        qInfo().noquote() << "[pty] 1.5s: bytes=" << m_totalBytes
+                          << "console procs=" << int(attached)
+                          << "child on parent console=" << childOnParentConsole;
+    });
+
     // A blocking ReadFile cannot be cancelled cleanly, so the reader polls the
     // pipe instead; 4 ms is well below the perceptible latency of a terminal.
     d->reader = std::thread([this] {
@@ -395,9 +413,11 @@ bool PtyProcess::start(const QString &program, const QStringList &args,
             DWORD read = 0;
             if (!ReadFile(state->outputRead, buffer, want, &read, nullptr) || read == 0)
                 break;
+            m_totalBytes += qint64(read);
             if (!m_loggedFirstData) {
                 m_loggedFirstData = true;
-                qInfo().noquote() << "[pty] first data" << int(read) << "bytes";
+                qInfo().noquote() << "[pty] first data" << int(read) << "bytes:"
+                                  << QByteArray(buffer, int(qMin<DWORD>(read, 120u))).toPercentEncoding();
             }
             const QByteArray chunk(buffer, int(read));
             QMetaObject::invokeMethod(this, [this, chunk] { emit dataRead(chunk); },

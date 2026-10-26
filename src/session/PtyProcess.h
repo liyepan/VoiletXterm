@@ -57,6 +57,7 @@ private:
     QString m_error;
     bool m_finished = false;
     bool m_loggedFirstData = false;
+    qint64 m_totalBytes = 0;
 };
 
 } // namespace vx
