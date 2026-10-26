@@ -52,7 +52,9 @@ qtermwidget 是 GPL-2.0，会传染整个项目，因此排除——这也是自
 | ConPTY（`--conpty`） | 实验性 | `CreatePseudoConsole` 返回成功、子进程也挂上了控制台（收到它 56 字节的初始化序列，含 ssh.exe 的窗口标题），但子进程的标准输出仍写向父进程的 stdout，界面收不到任何数据 |
 | ConPTY + 继承父 stdout | 已排除 | 早期版本在 `CreateProcess` 之前关闭 pty 侧管道句柄，会退化成继承父控制台，ssh 报 "stdin is not a terminal"；调整关闭时机后仍不解决 |
 
-结论：Windows 上暂时用管道方案保证可用，ConPTY 的问题留作后续专项。真正的无损方案（包括窗口尺寸随窗口变化）需要让 ConPTY 正确接管子进程的标准句柄。
+排查结果：`STARTUPINFOEX` 里没有设置 `STARTF_USESTDHANDLES`，于是子进程**继承了父进程的标准句柄**——ssh 的输出全都写进了父进程的 stdout，pty 只收到 ConPTY 自己的初始化序列。Windows Terminal 的 `ConptyConnection` 正是显式设置 `STARTF_USESTDHANDLES` 并把三个句柄留空，让控制台子系统在挂接时填入自己的句柄。
+
+修复：ConPTY 路径同样设置 `STARTF_USESTDHANDLES` + 空句柄；创建进程失败或 2.5 秒无数据时自动回退到管道方案。验证通过后即可把 Windows 默认后端切回 ConPTY，顺带拿回随窗口变化的终端尺寸。
 
 ## 后果
 

@@ -329,6 +329,16 @@ bool PtyProcess::start(const QString &program, const QStringList &args,
     ZeroMemory(&startup, sizeof(startup));
     startup.StartupInfo.cb = sizeof(STARTUPINFOEXW);
 
+    // Without STARTF_USESTDHANDLES the child inherits the parent's standard
+    // handles (our own stdout, i.e. whoever launched us) even though a pseudo
+    // console is attached, so ssh writes its output into that instead of the
+    // pty. Windows Terminal does exactly this: ask for explicit handles and
+    // leave them NULL so the console subsystem supplies its own on attach.
+    startup.StartupInfo.dwFlags = STARTF_USESTDHANDLES;
+    startup.StartupInfo.hStdInput = nullptr;
+    startup.StartupInfo.hStdOutput = nullptr;
+    startup.StartupInfo.hStdError = nullptr;
+
     // Any failure below has to release everything that was allocated so far.
     const auto abortStart = [&](const QString &message) {
         m_error = message;
@@ -389,7 +399,14 @@ bool PtyProcess::start(const QString &program, const QStringList &args,
 
     if (!created2) {
         const DWORD error = GetLastError();
-        return abortStart(tr("无法启动 %1（错误码 %2）").arg(program).arg(int(error)));
+        // Never leave the user without a session: drop the pty and use pipes.
+        qWarning().noquote() << "[pty] CreateProcess failed, error=" << int(error)
+                             << "- falling back to pipes";
+        CloseHandle(inputRead);
+        CloseHandle(outputWrite);
+        teardownConPty();
+        startPipeFallback();
+        return true;
     }
 
     // The client owns its own copy of the console ends now, so the ones handed
