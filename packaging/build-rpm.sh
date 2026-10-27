@@ -25,6 +25,7 @@ License:        MIT
 URL:            https://git.linuxacme.com/liyepan/VoiletXterm
 BuildArch:      $arch
 AutoReqProv:    yes
+Recommends:     qt5-qtwayland
 
 %description
 A lightweight terminal workspace with its own VT100/xterm engine.

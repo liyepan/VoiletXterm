@@ -799,7 +799,13 @@ void TerminalWidget::mousePressEvent(QMouseEvent *event)
 {
     setFocus();
     if (event->button() == Qt::MiddleButton) {
-        const QString text = QApplication::clipboard()->text(QClipboard::Selection);
+        // Wayland has no PRIMARY selection: fall back to the clipboard so the
+        // middle button still pastes something useful there.
+        QClipboard *clipboard = QApplication::clipboard();
+        QString text = clipboard->supportsSelection() ? clipboard->text(QClipboard::Selection)
+                                                      : QString();
+        if (text.isEmpty())
+            text = clipboard->text(QClipboard::Clipboard);
         if (!text.isEmpty()) {
             QString filtered = text;
             filtered.replace(QStringLiteral("\r\n"), QStringLiteral("\r"));

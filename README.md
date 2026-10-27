@@ -138,6 +138,7 @@ CI 在 `.github/workflows/package.yml`：推 `main` 或打 `v*` tag 时四个平
 ## 已知限制
 
 - Windows 上 ConPTY 与管道两套后端都已实测；ConPTY 不可用时自动退回管道（后者远端尺寸固定）
+- Linux 上走 Wayland 还是 XWayland 交给发行版决定（不硬设 `QT_QPA_PLATFORM`）；deb/rpm 都 Recommends 了 Qt 的 Wayland 平台插件
 - macOS 用 `util.h` 的 `forkpty`，未实机测试
 - 没有 SFTP 文件面板、没有 X11 转发、没有 RDP（MobaXterm 的那部分不在当前范围）
 - 没有标签内搜索、没有分屏
