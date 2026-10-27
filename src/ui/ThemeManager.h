@@ -36,7 +36,8 @@ signals:
 private:
     explicit ThemeManager(QObject *parent = nullptr);
     void reevaluate(bool force);
-    bool detectSystemDark() const;
+    bool detectSystemDark();
+    QString m_systemSource;
 
     Mode m_mode = System;
     bool m_dark = true;

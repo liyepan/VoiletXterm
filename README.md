@@ -76,9 +76,9 @@ voiletxterm serial:/dev/ttyUSB0@115200
 
 | 选项 | 行为 |
 | --- | --- |
-| 跟随系统 | Windows 读注册表 `Personalize\\AppsUseLightTheme`，macOS 读 `defaults read -g AppleInterfaceStyle`，Linux 读 GNOME `color-scheme` / `gtk-theme`；都取不到时按 Qt 调色板亮度兜底 |
+| 跟随系统（默认） | Windows 读注册表 `Personalize\\AppsUseLightTheme`；macOS 读 `defaults read -g AppleInterfaceStyle`；Linux 依次尝试 **XDG 桌面门户**（GTK4 / KDE 的标准做法）→ `GTK_THEME` 环境变量 → KDE 会话下的 `kdeglobals` → GTK `color-scheme` / `gtk-theme` 设置 → `kdeglobals` 兜底，最后才按 Qt 调色板亮度判断 |
 | 按时间自动 | 6:00–18:00 浅色，其余时间深色；每 30 秒复核一次，跨过整点自动切换 |
-| 深色（默认） | 深灰底白字 |
+| 深色 | 深灰底白字 |
 | 浅色 | 白底黑字，强光环境或投影时用 |
 
 > 主题只影响界面外壳（标签、工具栏、对话框）。终端本身固定用黑底白字，浅色界面下也不会变成白底——白色终端长时间盯着太难受。
