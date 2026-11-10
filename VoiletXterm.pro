@@ -37,6 +37,7 @@ SOURCES += \
     src/term/BundledFont.cpp \
     src/term/TerminalTheme.cpp \
     src/term/TerminalWidget.cpp \
+    src/session/CredentialStore.cpp \
     src/session/PtyProcess.cpp \
     src/session/SerialTransport.cpp \
     src/session/SessionFactory.cpp \
@@ -58,6 +59,7 @@ HEADERS += \
     src/term/BundledFont.h \
     src/term/TerminalTheme.h \
     src/term/TerminalWidget.h \
+    src/session/CredentialStore.h \
     src/session/PtyProcess.h \
     src/session/SerialTransport.h \
     src/session/SessionFactory.h \
@@ -71,6 +73,7 @@ HEADERS += \
     src/ui/Style.h \
     src/ui/ThemeManager.h
 
+win32: LIBS += -lcrypt32
 unix: LIBS += -lutil
 
 # Linux packaging: make install INSTALL_ROOT=<dir> stages /usr/bin + desktop entry.

@@ -377,8 +377,9 @@ jobs:
           TAG: ${{ startsWith(github.ref, 'refs/tags/') && github.ref_name || format('v{0}', steps.meta.outputs.version) }}
         run: |
           if [ -z "$GITEA_TOKEN" ]; then
-            echo "没有配置 GITEA_TOKEN，跳过；tag 需要手动推到 Gitea"
-            exit 0
+            echo "::error::没有配置 GITEA_TOKEN：tag 只存在于 GitHub，下一次 Gitea 镜像强推会剪掉它，Release 会变成草稿"
+            echo "在仓库 Secrets 里加上 GITEA_TOKEN（需要 write_repository 权限）后重跑"
+            exit 1
           fi
           url="https://oauth2:$GITEA_TOKEN@git.linuxacme.com/liyepan/VoiletXterm.git"
           if git ls-remote --exit-code --tags "$url" "refs/tags/$TAG" >/dev/null 2>&1; then
@@ -424,3 +425,17 @@ jobs:
           make_latest: "true"
           generate_release_notes: true
           fail_on_unmatched_files: true
+
+      - name: 确认已正式发布
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          TAG: ${{ startsWith(github.ref, 'refs/tags/') && github.ref_name || format('v{0}', steps.meta.outputs.version) }}
+        run: |
+          state=$(gh release view "$TAG" --json isDraft,url --jq '"draft=\(.isDraft) \(.url)"')
+          echo "$state"
+          case "$state" in
+            draft=true*)
+              echo "::error::Release 仍然是草稿"
+              exit 1
+              ;;
+          esac

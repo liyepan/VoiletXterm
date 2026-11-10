@@ -1,5 +1,6 @@
 #include "SessionDialog.h"
 
+#include "../session/CredentialStore.h"
 #include "SessionStore.h"
 
 #include <QCheckBox>
@@ -95,12 +96,21 @@ void SessionDialog::buildUi()
     m_jumpEdit->setPlaceholderText(tr("可选，例如 user@bastion:22"));
     m_commandEdit = new QLineEdit(sshPage);
     m_commandEdit->setPlaceholderText(tr("可选，登录后立即执行"));
+
+    m_passwordEdit = new QLineEdit(sshPage);
+    m_passwordEdit->setEchoMode(QLineEdit::Password);
+    m_passwordEdit->setPlaceholderText(tr("留空则每次连接时手动输入"));
+    m_savePasswordCheck = new QCheckBox(tr("保存密码"), sshPage);
+    auto *passwordRow = new QHBoxLayout;
+    passwordRow->addWidget(m_passwordEdit, 1);
+    passwordRow->addWidget(m_savePasswordCheck);
     sshForm->addRow(tr("主机"), m_hostEdit);
     sshForm->addRow(tr("端口"), m_portSpin);
     sshForm->addRow(tr("用户名"), m_userEdit);
     sshForm->addRow(tr("私钥"), keyRow);
     sshForm->addRow(tr("跳板机"), m_jumpEdit);
     sshForm->addRow(tr("远程命令"), m_commandEdit);
+    sshForm->addRow(tr("密码"), passwordRow);
     m_tabs->addTab(sshPage, tr("SSH"));
 
     // Telnet page
@@ -182,6 +192,8 @@ void SessionDialog::buildUi()
         m_jumpEdit->clear();
         m_commandEdit->clear();
         m_telnetHostEdit->clear();
+        m_passwordEdit->clear();
+        m_savePasswordCheck->setChecked(false);
     });
     connect(browse, &QPushButton::clicked, this, &SessionDialog::onBrowseKey);
     connect(refresh, &QPushButton::clicked, this, &SessionDialog::onRefreshPorts);
@@ -258,6 +270,10 @@ void SessionDialog::loadSpecIntoForm(const SessionSpec &spec)
         m_keyEdit->setText(spec.keyFile);
         m_jumpEdit->setText(spec.jumpHost);
         m_commandEdit->setText(spec.remoteCommand);
+        m_savePasswordCheck->setChecked(spec.savePassword);
+        m_passwordEdit->setText(spec.password.isEmpty() && spec.savePassword
+                                    ? CredentialStore::load(spec.credentialKey())
+                                    : spec.password);
         break;
     case SessionSpec::Telnet:
         m_tabs->setCurrentIndex(1);
@@ -303,6 +319,8 @@ void SessionDialog::applyPageToSpec()
         m_spec.keyFile = m_keyEdit->text().trimmed();
         m_spec.jumpHost = m_jumpEdit->text().trimmed();
         m_spec.remoteCommand = m_commandEdit->text().trimmed();
+        m_spec.password = m_passwordEdit->text();
+        m_spec.savePassword = m_savePasswordCheck->isChecked();
     } else if (page == 1) {
         m_spec.type = SessionSpec::Telnet;
         m_spec.host = m_telnetHostEdit->text().trimmed();
@@ -336,6 +354,15 @@ void SessionDialog::onAccept()
 
     if (m_spec.name.isEmpty())
         m_spec.name = m_spec.displayName();
+
+    if (m_spec.type == SessionSpec::Ssh) {
+        const QString key = m_spec.credentialKey();
+        if (m_spec.savePassword && !m_spec.password.isEmpty())
+            CredentialStore::save(key, m_spec.password);
+        else if (!m_spec.savePassword)
+            CredentialStore::remove(key);
+    }
+
     accept();
 }
 

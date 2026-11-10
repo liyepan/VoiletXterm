@@ -3,6 +3,7 @@
 #include "SessionDialog.h"
 #include "SessionStore.h"
 
+#include "../session/CredentialStore.h"
 #include "../session/SessionFactory.h"
 #include "../session/Transport.h"
 #include "../term/TerminalTheme.h"
@@ -287,6 +288,10 @@ void MainWindow::newSerialSession()
 
 void MainWindow::openSession(const SessionSpec &spec)
 {
+    SessionSpec resolved = spec;
+    if (resolved.type == SessionSpec::Ssh && resolved.password.isEmpty() && resolved.savePassword)
+        resolved.password = CredentialStore::load(resolved.credentialKey());
+
     auto *terminal = new TerminalWidget(this);
     TerminalWidget *widget = terminal;
     widget->setTheme(darkTheme());
@@ -302,11 +307,11 @@ void MainWindow::openSession(const SessionSpec &spec)
     if (storedWeight > 0)
         widget->setBaseFontWeight(storedWeight);
 
-    const int index = m_tabs->addTab(widget, spec.displayName());
+    const int index = m_tabs->addTab(widget, resolved.displayName());
     m_tabs->setCurrentIndex(index);
     m_stack->setCurrentWidget(m_tabs);
 
-    Transport *transport = createTransport(spec, widget);
+    Transport *transport = createTransport(resolved, widget);
     if (!transport) {
         delete widget;
         return;

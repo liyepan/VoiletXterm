@@ -114,6 +114,18 @@ SSH 客户端最难的不是握手，而是把密钥、agent、跳板、known_ho
 **宽字符对齐**
 默认字体优先选半角/全角宽度严格 1:2 的字体（Sarasa Mono SC、文泉驿等宽正黑），这样 `中` 正好占两格；找不到再退回 DejaVu Sans Mono。
 
+### 保存密码
+
+SSH 页可以填密码并勾选「保存密码」。密码不会写进会话配置，而是交给系统钥匙串：
+
+| 平台 | 存储 |
+| --- | --- |
+| Windows | DPAPI（当前用户） |
+| macOS | Keychain |
+| Linux | libsecret（`secret-tool`）；没有则退化为 `~/.config/VoiletXterm/vault.key` 的本地弱加密 |
+
+连接时通过 `SSH_ASKPASS` 把密码交给 ssh（`SSH_ASKPASS_REQUIRE=force`，需要 OpenSSH 8.4+），密码不再显示在终端里。
+
 ## 打包
 
 版本号写在 `VoiletXterm.pro` 的 `VERSION` 里，下面这些脚本会读它。
@@ -134,6 +146,8 @@ cd .. && ./packaging/build-deb.sh build/stage 0.1.0 amd64 dist
 ```
 
 CI 在 `.github/workflows/package.yml`：推 `main` 或打 `v*` tag 时四个平台并行构建，最后汇总挂到 GitHub Release（附 `SHA256SUMS`）。GitHub 之外（比如 Gitea）会自动跳过所有 job。
+
+> **必须配置 `GITEA_TOKEN`**。仓库是 Gitea 用 `--mirror` 强推到 GitHub 的，镜像会剪掉 GitHub 上多出来的 tag；而 GitHub 的规则是 **Release 的 tag 一旦消失，这个 Release 会被打回草稿**。所以发布时要把 tag 同步回 Gitea，否则过一阵就"自己变草稿"。`repair-release.yml` 每 6 小时兜底：把草稿重新发布，tag 丢了就从 `targetCommitish` 重建。
 
 ## 已知限制
 

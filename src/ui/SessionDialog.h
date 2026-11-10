@@ -57,6 +57,8 @@ private:
     QLineEdit *m_keyEdit = nullptr;
     QLineEdit *m_jumpEdit = nullptr;
     QLineEdit *m_commandEdit = nullptr;
+    QLineEdit *m_passwordEdit = nullptr;
+    QCheckBox *m_savePasswordCheck = nullptr;
 
     // Telnet
     QLineEdit *m_telnetHostEdit = nullptr;

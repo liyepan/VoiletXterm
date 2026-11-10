@@ -4,6 +4,14 @@
 
 namespace vx {
 
+QString SessionSpec::credentialKey() const
+{
+    if (type == Serial)
+        return QStringLiteral("serial://") + serialPort;
+    return QStringLiteral("ssh://%1@%2:%3").arg(user.isEmpty() ? QStringLiteral("default") : user, host)
+        .arg(port);
+}
+
 QString SessionSpec::displayName() const
 {
     if (!name.isEmpty())
@@ -50,6 +58,7 @@ QJsonObject SessionSpec::toJson() const
     o.insert(QStringLiteral("parity"), parity);
     o.insert(QStringLiteral("flowControl"), flowControl);
     o.insert(QStringLiteral("localEcho"), localEcho);
+    o.insert(QStringLiteral("savePassword"), savePassword);
     return o;
 }
 
@@ -74,6 +83,7 @@ SessionSpec SessionSpec::fromJson(const QJsonObject &o)
     s.parity = o.value(QStringLiteral("parity")).toString(QStringLiteral("none"));
     s.flowControl = o.value(QStringLiteral("flowControl")).toString(QStringLiteral("none"));
     s.localEcho = o.value(QStringLiteral("localEcho")).toBool(false);
+    s.savePassword = o.value(QStringLiteral("savePassword")).toBool(false);
     return s;
 }
 

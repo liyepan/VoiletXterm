@@ -55,6 +55,7 @@ public slots:
     void copySelection();
     void pasteClipboard();
     void selectAll();
+    void clearSelection();
     void clearScrollback();
     void clearScreen();
     void zoomIn();
@@ -103,7 +104,6 @@ private:
 
     bool hasSelection() const;
     bool isSelected(int absoluteLine, int column) const;
-    void clearSelection();
     void selectionRange(int &startLine, int &startCol, int &endLine, int &endCol) const;
     QString selectedText() const;
     void copyToClipboards(const QString &text);

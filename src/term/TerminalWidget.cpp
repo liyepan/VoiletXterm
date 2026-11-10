@@ -469,10 +469,12 @@ void TerminalWidget::drawRow(QPainter &painter, int screenRow, int absoluteLine)
         const bool wide = cell.isWideHead();
         const int span = wide ? 2 : 1;
 
-        if (bg != m_theme.background || selected)
-            painter.fillRect(QRectF(c * m_cellWidth, y, span * m_cellWidth, m_cellHeight), bg);
-
         if (wide) {
+            // A double width glyph is painted on its own, so its background is
+            // filled here. Runs are filled after they have been measured.
+            if (bg != m_theme.background || selected)
+                painter.fillRect(QRectF(c * m_cellWidth, y, span * m_cellWidth, m_cellHeight), bg);
+
             painter.save();
             painter.setClipRect(QRectF(c * m_cellWidth, y, 2 * m_cellWidth, m_cellHeight));
             painter.setFont(fontFor(attrs));
@@ -501,20 +503,27 @@ void TerminalWidget::drawRow(QPainter &painter, int screenRow, int absoluteLine)
         if (c == runStart)
             ++c;
 
+        const qreal runWidth = (c - runStart) * m_cellWidth;
+        const qreal runX = runStart * m_cellWidth;
+
+        // The background belongs to the whole run, not just to its first cell.
+        // Filling only that one is what made selections look like a one pixel
+        // sliver and left coloured backgrounds broken.
+        if (bg != m_theme.background || selected)
+            painter.fillRect(QRectF(runX, y, runWidth, m_cellHeight), bg);
+
         painter.setFont(fontFor(attrs));
         painter.setPen(fg);
-        painter.drawText(QPointF(runStart * m_cellWidth, baseline), run);
-
-        const qreal runWidth = (c - runStart) * m_cellWidth;
+        painter.drawText(QPointF(runX, baseline), run);
         if (attrs & (AttrUnderline | AttrDoubleUnderline)) {
-            painter.fillRect(QRectF(runStart * m_cellWidth, baseline + 1, runWidth, 1), fg);
+            painter.fillRect(QRectF(runX, baseline + 1, runWidth, 1), fg);
             if (attrs & AttrDoubleUnderline)
-                painter.fillRect(QRectF(runStart * m_cellWidth, baseline + 3, runWidth, 1), fg);
+                painter.fillRect(QRectF(runX, baseline + 3, runWidth, 1), fg);
         }
         if (attrs & AttrStrike)
-            painter.fillRect(QRectF(runStart * m_cellWidth, y + m_cellHeight * 0.5, runWidth, 1), fg);
+            painter.fillRect(QRectF(runX, y + m_cellHeight * 0.5, runWidth, 1), fg);
         if (attrs & AttrOverline)
-            painter.fillRect(QRectF(runStart * m_cellWidth, y, runWidth, 1), fg);
+            painter.fillRect(QRectF(runX, y, runWidth, 1), fg);
     }
 }
 

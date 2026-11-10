@@ -8,6 +8,9 @@
 #include <QCommandLineParser>
 #include <QDebug>
 
+#include <cstdio>
+#include <cstring>
+
 namespace {
 
 // Accepts "user@host:port", "telnet://host:port" or "serial:/dev/ttyUSB0@115200".
@@ -59,6 +62,19 @@ bool parseTarget(const QString &target, vx::SessionSpec &spec)
 
 int main(int argc, char *argv[])
 {
+    // ssh calls "voiletxterm --askpass <prompt>" when a password is saved.
+    for (int i = 1; i < argc; ++i) {
+        if (qstrcmp(argv[i], "--askpass") == 0) {
+            const QByteArray secret = qgetenv("VOILET_ASKPASS_PASSWORD");
+            if (secret.isEmpty())
+                return 1;
+            fwrite(secret.constData(), 1, size_t(secret.size()), stdout);
+            fputc('\n', stdout);
+            fflush(stdout);
+            return 0;
+        }
+    }
+
 #if QT_VERSION < QT_VERSION_CHECK(6, 0, 0)
     QCoreApplication::setAttribute(Qt::AA_EnableHighDpiScaling);
     QCoreApplication::setAttribute(Qt::AA_UseHighDpiPixmaps);

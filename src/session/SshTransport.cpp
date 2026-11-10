@@ -2,6 +2,7 @@
 
 #include "PtyProcess.h"
 
+#include <QCoreApplication>
 #include <QDir>
 #include <QFileInfo>
 
@@ -61,6 +62,15 @@ void SshTransport::buildCommand(QString &program, QStringList &args, QHash<QStri
         args << m_spec.remoteCommand;
 
     env.insert(QStringLiteral("LANG"), QStringLiteral("en_US.UTF-8"));
+
+    // Saved passwords go to ssh through an askpass helper instead of being
+    // typed into the pty. SSH_ASKPASS_REQUIRE=force (OpenSSH 8.4+) makes ssh
+    // use the helper even though a terminal is attached.
+    if (!m_spec.password.isEmpty()) {
+        env.insert(QStringLiteral("SSH_ASKPASS"), QCoreApplication::applicationFilePath());
+        env.insert(QStringLiteral("SSH_ASKPASS_REQUIRE"), QStringLiteral("force"));
+        env.insert(QStringLiteral("VOILET_ASKPASS_PASSWORD"), m_spec.password);
+    }
 }
 
 bool SshTransport::start(int cols, int rows)

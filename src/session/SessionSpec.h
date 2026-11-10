@@ -21,6 +21,10 @@ struct SessionSpec {
     QString remoteCommand;
     QStringList extraOptions;
 
+    // Never serialised: the password lives in the credential store.
+    QString password;
+    bool savePassword = false;
+
     // serial
     QString serialPort;
     int baudRate = 115200;
@@ -30,6 +34,8 @@ struct SessionSpec {
     QString flowControl = QStringLiteral("none");
     bool localEcho = false;
 
+    // Stable key used by the credential store, e.g. "ssh://user@host:22".
+    QString credentialKey() const;
     QString displayName() const;
     QString summary() const;
     QJsonObject toJson() const;

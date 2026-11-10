@@ -1,11 +1,13 @@
 // Renders a TerminalWidget offscreen and inspects the produced pixels, so the
 // painting path can be verified without a display.
 #include <QApplication>
+#include <QDir>
 #include <QImage>
 #include <QScrollBar>
 #include <QtTest/QTest>
 #include <cstdio>
 
+#include "session/CredentialStore.h"
 #include "session/Transport.h"
 #include "ui/Style.h"
 
@@ -71,6 +73,11 @@ static int countNonBackground(const QImage &image, const QRect &rect, const QCol
 int main(int argc, char *argv[])
 {
     QApplication app(argc, argv);
+    // QSettings and the credential store need an application identity and a
+    // writable config directory (CI sandboxes often have a read-only home).
+    QCoreApplication::setOrganizationName(QStringLiteral("VoiletXtermTest"));
+    QCoreApplication::setApplicationName(QStringLiteral("VoiletXtermTest"));
+    qputenv("XDG_CONFIG_HOME", QDir::tempPath().toUtf8() + "/voiletxterm-test-config");
 
     TerminalWidget widget;
     widget.resize(820, 420);
@@ -128,11 +135,30 @@ int main(int argc, char *argv[])
     QImage cursorImage = widget.grab().toImage();
     CHECK(countNear(cursorImage, cursorImage.rect(), theme.cursor, 30) > 30);
 
-    // --- selection uses the highlight color ---
+    // --- selection paints the whole run, not just its first cell ---
     widget.selectAll();
     QCoreApplication::processEvents();
     QImage selectionImage = widget.grab().toImage();
-    CHECK(countNear(selectionImage, selectionImage.rect(), theme.selection, 30) > 500);
+    {
+        const int highlighted = countNear(selectionImage, selectionImage.rect(), theme.selection, 24);
+        const int total = selectionImage.width() * selectionImage.height();
+        CHECK(highlighted > total * 30 / 100);
+    }
+
+    // --- an SGR background covers the full run ---
+    widget.parser()->feed("\x1b[2J\x1b[H\x1b[7mABCDEF\x1b[0m");
+    QCoreApplication::processEvents();
+    {
+        const QImage reversed = widget.grab().toImage();
+        const qreal cw = qreal(widget.viewport()->width()) / widget.screen()->columns();
+        const QRect band(0, 0, int(6 * cw), int(cellH));
+        int light = 0;
+        for (int y = band.top(); y <= band.bottom() && y < reversed.height(); ++y)
+            for (int x = band.left(); x <= band.right() && x < reversed.width(); ++x)
+                if (reversed.pixelColor(x, y).lightness() > 120)
+                    ++light;
+        CHECK(light > band.width() * band.height() * 55 / 100);
+    }
 
     // --- the light scheme paints a light background with dark ink ---
     {
@@ -153,6 +179,7 @@ int main(int argc, char *argv[])
 
     // --- a light UI must not repaint the terminal white ---
     {
+        widget.clearSelection();
         applyStyle(false); // light application chrome
         widget.setTheme(darkTheme());
         QCoreApplication::processEvents();
@@ -253,6 +280,16 @@ int main(int argc, char *argv[])
         CHECK(qApp->palette().color(QPalette::Window).lightness() > 180);
         CHECK(!qApp->styleSheet().contains(QLatin1Char('@')));
         CHECK(qApp->styleSheet().contains(QStringLiteral("#FFFFFF")));
+    }
+
+    // --- the credential store round-trips a secret ---
+    {
+        const QString key = QStringLiteral("voiletxterm-test://credential");
+        CHECK(CredentialStore::save(key, QStringLiteral("hunter2")));
+        CHECK(CredentialStore::load(key) == QStringLiteral("hunter2"));
+        CredentialStore::remove(key);
+        CHECK(CredentialStore::load(key).isEmpty());
+        std::printf("credential store backend: %s\n", qPrintable(CredentialStore::backendName()));
     }
 
     // --- palettes must stay readable (WCAG contrast) ---
