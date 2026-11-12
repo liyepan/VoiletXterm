@@ -176,6 +176,17 @@ void SessionDialog::buildUi()
     auto *buttons = new QDialogButtonBox(QDialogButtonBox::Ok | QDialogButtonBox::Cancel, this);
     buttons->button(QDialogButtonBox::Ok)->setText(tr("连接"));
     buttons->button(QDialogButtonBox::Cancel)->setText(tr("取消"));
+    buttons->button(QDialogButtonBox::Ok)->setDefault(true);
+
+    // Every other button must not become the dialog's auto-default: Qt paints
+    // the focused auto-default button with the accent colour, which is why the
+    // refresh button stayed blue after being clicked.
+    for (QPushButton *button : findChildren<QPushButton *>()) {
+        if (button != buttons->button(QDialogButtonBox::Ok)) {
+            button->setAutoDefault(false);
+            button->setDefault(false);
+        }
+    }
     right->addWidget(buttons);
 
     root->addLayout(right, 1);

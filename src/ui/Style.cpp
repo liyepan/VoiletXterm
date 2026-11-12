@@ -53,13 +53,15 @@ const char *kStyleSheet = R"QSS(
     QMainWindow, QDialog { background: @window@; }
     QWidget { color: @text@; }
 
-    QTabWidget::pane { border: 1px solid @border@; top: -1px; }
-    QTabBar { background: @panel@; }
+    QTabWidget::pane { border: 1px solid @border@; background: @window@; top: -1px; }
+    /* Transparent strip: a solid @panel@ painted white square corners behind
+       the rounded tabs in the light theme. */
+    QTabBar { background: transparent; }
     QTabBar::tab {
         background: transparent; color: @muted@;
         padding: 7px 18px; margin-right: 2px;
         border: 1px solid transparent; border-bottom: none;
-        border-top-left-radius: 4px; border-top-right-radius: 4px;
+        border-top-left-radius: 6px; border-top-right-radius: 6px;
         font-weight: 600;
     }
     QTabBar::tab:hover:!selected { background: @panelAlt@; color: @text@; }
@@ -67,6 +69,7 @@ const char *kStyleSheet = R"QSS(
         background: @window@; color: @text@;
         border: 1px solid @border@; border-bottom: none;
         border-top: 2px solid @accent@;
+        border-top-left-radius: 6px; border-top-right-radius: 6px;
     }
 
     QToolBar { background: @panel@; border: 0; border-bottom: 1px solid @border@; spacing: 4px; padding: 4px; }
