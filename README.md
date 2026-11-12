@@ -148,7 +148,15 @@ cd .. && ./packaging/build-deb.sh build/stage 0.1.0 amd64 dist
 
 CI 在 `.github/workflows/package.yml`：推 `main` 或打 `v*` tag 时四个平台并行构建，最后汇总挂到 GitHub Release（附 `SHA256SUMS`）。GitHub 之外（比如 Gitea）会自动跳过所有 job。
 
-> **必须配置 `GITEA_TOKEN`**。仓库是 Gitea 用 `--mirror` 强推到 GitHub 的，镜像会剪掉 GitHub 上多出来的 tag；而 GitHub 的规则是 **Release 的 tag 一旦消失，这个 Release 会被打回草稿**。所以发布时要把 tag 同步回 Gitea，否则过一阵就"自己变草稿"。`repair-release.yml` 每 6 小时兜底：把草稿重新发布，tag 丢了就从 `targetCommitish` 重建。
+> **tag 必须在 Gitea 上创建**，工作流只在 tag push 时发布：
+>
+> ```bash
+> git tag -a v0.1.1 -m "release 0.1.1" && git push origin v0.1.1   # origin = Gitea
+> ```
+>
+> push mirror 会把 tag 带到 GitHub，工作流在 tag push 上构建并把产物挂上去。
+> **不要靠"推 main 自动发版"**：那样 tag 由 GitHub 端的 action 临时创建、Gitea 里没有，
+> 镜像下一次 `--mirror` 强推会 prune 掉它，而 GitHub 的规则是 **tag 没了，Release 就被打回草稿**。
 
 ## 已知限制
 
