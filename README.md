@@ -32,7 +32,7 @@ MobaXterm 很好用，但只跑 Windows、源码闭源。VoiletXterm 只做三�
 - 界面有浅色 / 深色两套主题（可跟随系统或按时间自动切换），**终端始终黑底白字**，Ctrl+滚轮缩放字号
 - **内置 JetBrains Mono NL 字体**（SIL OFL 1.1），界面和终端统一使用，三平台外观一致，不需要用户自己装字体
   - 正文 Regular，按钮 Medium，标签页 SemiBold，终端可单独在「视图 → 字体」里调
-- **内置 JetBrains Mono NL 字体**（SIL OFL 1.1），三个平台外观一致，不需要用户自己装字体
+- SSH 密码可以存进系统钥匙串，下次直接登录（见下文）
 
 ## 构建
 
@@ -107,13 +107,21 @@ tests/        test_core（转义序列）、test_widget（离屏渲染 + 键位�
 **为什么 SSH 用系统 `ssh` 而不是内嵌协议库？**
 SSH 客户端最难的不是握手，而是把密钥、agent、跳板、known_hosts、二次验证这些琐事处理对。系统 OpenSSH 已经替我们做了二十年。VoiletXterm 用 `forkpty` 起一个 `ssh`，窗口尺寸通过 `TIOCSWINSZ` 同步，密码提示、主机指纹确认直接显示在终端里——所见即系统 ssh 的所见。
 
-代价是依赖系统的 `ssh`（Linux/macOS 自带），以及无法做程序化的密码保管。
+代价是依赖系统的 `ssh`（Linux/macOS 自带；Windows 需要 OpenSSH 客户端）。密码可以通过 `SSH_ASKPASS` 交给它，所以"保存密码"这条路是通的，见下文。
+
+**为什么不做 X11 转发和 RDP？**
+这两个经常和 MobaXterm 一起被提起，但它们和"终端"是两套东西：
+
+- **X11 转发**：SSH 协议里有一条 X11 channel。远端程序绘图时不是直接画在屏幕上，而是把绘图指令发给 X server；X11 转发就是把这条 channel 接到本机的 X server，于是远端的图形窗口出现在你本地。它要求本机有 X server（Windows 没有，所以 MobaXterm 自己内置了一个），并且每个窗口都要走 SSH 传输，延迟明显。
+- **RDP**：远程桌面协议，把整台 Windows 桌面（画面 + 键盘鼠标）传过来，本质是"远程桌面会话"，和终端无关。它在 MobaXterm 里只是一个内置的 RDP 客户端。
+
+VoiletXterm 的定位是**纯终端工具**：SSH / Telnet / 串口 + 文件传输。要做 X11 就得维护一整套 X server 分发与窗口嵌入，要做 RDP 就得内嵌一个完整的桌面客户端，两者都和"轻量、单二进制"冲突，所以不做。真要图形：Linux/macOS 直接用系统自带的 `ssh -X`，Windows 用系统 RDP 客户端或 WSLg。
 
 **为什么不用 qtermwidget？**
 它是 GPL-2.0，一旦引入整个项目就得按 GPL 发布；而且 Konsole 血统的 QPainter 路径限制了性能上限。自研内核约 2000 行，MIT 无约束，问题也能自己修。
 
-**宽字符对齐**
-默认字体优先选半角/全角宽度严格 1:2 的字体（Sarasa Mono SC、文泉驿等宽正黑），这样 `中` 正好占两格；找不到再退回 DejaVu Sans Mono。
+**字体与对齐**
+字体随二进制分发（JetBrains Mono NL），不再依赖系统装了什么。格子宽度按整像素取整，并用 `letterSpacing` 补偿字体本身的步进，保证每列都落在整像素上——否则每隔一列的字会落在半像素上，看着发虚。
 
 ### 保存密码
 
@@ -148,24 +156,31 @@ cd .. && ./packaging/build-deb.sh build/stage 0.1.0 amd64 dist
 
 CI 在 `.github/workflows/package.yml`：推 `main` 或打 `v*` tag 时四个平台并行构建，最后汇总挂到 GitHub Release（附 `SHA256SUMS`）。GitHub 之外（比如 Gitea）会自动跳过所有 job。
 
-> **tag 必须在 Gitea 上创建**，工作流只在 tag push 时发布：
+> **推 main 和打 tag 都会发布**。但要注意 tag 的来源：Gitea 的 push mirror 是 `--mirror` 强推，会 prune 掉"只在 GitHub 存在"的 tag，而 GitHub 的规则是 **tag 没了，Release 就被打回草稿**。
 >
+> 所以要么在 Gitea 上打 tag（镜像会带过来）：
 > ```bash
-> git tag -a v0.1.1 -m "release 0.1.1" && git push origin v0.1.1   # origin = Gitea
+> git tag -a v0.1.1 -m "release 0.1.1" && git push origin v0.1.1
 > ```
->
-> push mirror 会把 tag 带到 GitHub，工作流在 tag push 上构建并把产物挂上去。
-> **不要靠"推 main 自动发版"**：那样 tag 由 GitHub 端的 action 临时创建、Gitea 里没有，
-> 镜像下一次 `--mirror` 强推会 prune 掉它，而 GitHub 的规则是 **tag 没了，Release 就被打回草稿**。
+> 要么配一个 `GITEA_TOKEN` secret，让工作流把自动生成的 tag 推回 Gitea。两者都不做的话，草稿问题会回来。
 
 ## 已知限制
 
 - Windows 上 ConPTY 与管道两套后端都已实测；ConPTY 不可用时自动退回管道（后者远端尺寸固定）
 - Linux 上走 Wayland 还是 XWayland 交给发行版决定（不硬设 `QT_QPA_PLATFORM`）；deb/rpm 都 Recommends 了 Qt 的 Wayland 平台插件
 - macOS 用 `util.h` 的 `forkpty`，未实机测试
-- 没有 SFTP 文件面板、没有 X11 转发、没有 RDP（MobaXterm 的那部分不在当前范围）
 - 没有标签内搜索、没有分屏
-- SSH 密码登录在终端里交互，不经过独立密码框
+- **不做 X11 转发和 RDP**（原因见「设计取舍」）
+- SFTP 面板在规划中（见路线图）
+
+## 路线图
+
+- [x] 自研 VT100/xterm 内核、SSH / Telnet / 串口、会话管理
+- [x] 深浅色主题、内置字体、整像素网格
+- [x] SSH 密码保存（系统钥匙串）
+- [ ] **SFTP 文件面板**：按会话挂一个文件区，列目录（`find -printf` 解析）、下载 / 上传（`scp`）、删除、重命名、新建目录，复用同一个 ssh 的认证配置
+- [ ] 标签内搜索
+- [ ] 分屏
 
 ## 许可
 
