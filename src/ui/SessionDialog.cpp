@@ -8,6 +8,7 @@
 #include <QDialogButtonBox>
 #include <QDir>
 #include <QFileDialog>
+#include <QFileInfo>
 #include <QFormLayout>
 #include <QGroupBox>
 #include <QHBoxLayout>
@@ -213,10 +214,13 @@ void SessionDialog::onRefreshPorts()
 
     const auto ports = QSerialPortInfo::availablePorts();
     for (const QSerialPortInfo &info : ports) {
-        QString label = info.systemLocation();
-        const QString description = info.description().isEmpty() ? info.portName() : info.description();
-        if (!description.isEmpty())
-            label += QStringLiteral(" — %1").arg(description);
+        // Windows reports the device path as the system location: fine for
+        // QSerialPort, but ugly in the combo box, so show the short name.
+        QString label = info.portName();
+        if (label.isEmpty())
+            label = info.systemLocation();
+        if (!info.description().isEmpty() && info.description() != label)
+            label += QStringLiteral(" — %1").arg(info.description());
         m_serialPortCombo->addItem(label, info.systemLocation());
     }
 
@@ -225,9 +229,14 @@ void SessionDialog::onRefreshPorts()
         m_serialPortCombo->setEnabled(false);
     } else {
         m_serialPortCombo->setEnabled(true);
-        // keep a saved port that is not plugged in right now
-        if (!current.isEmpty() && m_serialPortCombo->findData(current) < 0)
-            m_serialPortCombo->addItem(current, current);
+        // a saved port that is not plugged in right now stays selectable
+        if (!current.isEmpty() && m_serialPortCombo->findData(current) < 0) {
+            // POSIX paths stay readable in full, Windows device paths do not.
+            QString label = current.contains(QLatin1Char('/')) ? current : QFileInfo(current).fileName();
+            if (label.isEmpty())
+                label = current;
+            m_serialPortCombo->addItem(label, current);
+        }
         const int index = current.isEmpty() ? 0 : m_serialPortCombo->findData(current);
         m_serialPortCombo->setCurrentIndex(index < 0 ? 0 : index);
     }
