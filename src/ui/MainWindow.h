@@ -3,8 +3,11 @@
 #include "../session/SessionSpec.h"
 
 #include <QMainWindow>
+#include <QVector>
 
 class QLabel;
+class QListWidget;
+class QSplitter;
 class QStackedWidget;
 class QTabWidget;
 
@@ -28,6 +31,9 @@ public slots:
 private slots:
     void closeCurrentTab();
     void chooseFont();
+    void reloadSessions();
+    void connectSelectedSession();
+    void showSessionMenu(const QPoint &pos);
     void onCurrentTabChanged(int index);
     void onTabCloseRequested(int index);
     void showAbout();
@@ -43,6 +49,9 @@ private:
     TerminalWidget *currentTerminal() const;
     void updateStatus();
 
+    QSplitter *m_splitter = nullptr;
+    QListWidget *m_sessionList = nullptr;
+    QVector<SessionSpec> m_sessions;
     QStackedWidget *m_stack = nullptr;
     QWidget *m_welcome = nullptr;
     QTabWidget *m_tabs = nullptr;

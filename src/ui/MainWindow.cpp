@@ -18,10 +18,12 @@
 #include <QFontDialog>
 #include <QHBoxLayout>
 #include <QLabel>
+#include <QListWidget>
 #include <QMenuBar>
 #include <QMessageBox>
 #include <QPushButton>
 #include <QSettings>
+#include <QSplitter>
 #include <QStackedWidget>
 #include <QStatusBar>
 #include <QTabWidget>
@@ -42,6 +44,9 @@ MainWindow::MainWindow(QWidget *parent)
     const QByteArray geometry = settings.value(QStringLiteral("window/geometry")).toByteArray();
     if (!geometry.isEmpty())
         restoreGeometry(geometry);
+    const QByteArray splitterState = settings.value(QStringLiteral("window/splitter")).toByteArray();
+    if (!splitterState.isEmpty())
+        m_splitter->restoreState(splitterState);
 
 
 }
@@ -105,7 +110,36 @@ void MainWindow::buildUi()
     m_stack->addWidget(m_welcome);
     m_stack->addWidget(m_tabs);
     m_stack->setCurrentWidget(m_welcome);
-    setCentralWidget(m_stack);
+
+    // Session sidebar: always visible on the left, splitter width is rembered.
+    auto *sidebar = new QWidget(this);
+    auto *sidebarLayout = new QVBoxLayout(sidebar);
+    sidebarLayout->setContentsMargins(0, 0, 0, 0);
+    sidebarLayout->setSpacing(0);
+
+    auto *sidebarTitle = new QLabel(tr("会话"), sidebar);
+    sidebarTitle->setProperty("role", "muted");
+    sidebarTitle->setContentsMargins(12, 8, 12, 6);
+    sidebarLayout->addWidget(sidebarTitle);
+
+    m_sessionList = new QListWidget(sidebar);
+    m_sessionList->setFrameShape(QFrame::NoFrame);
+    m_sessionList->setContextMenuPolicy(Qt::CustomContextMenu);
+    sidebarLayout->addWidget(m_sessionList, 1);
+
+    m_splitter = new QSplitter(Qt::Horizontal, this);
+    m_splitter->setChildrenCollapsible(false);
+    m_splitter->addWidget(sidebar);
+    m_splitter->addWidget(m_stack);
+    m_splitter->setStretchFactor(0, 0);
+    m_splitter->setStretchFactor(1, 1);
+    m_splitter->setSizes({200, 900});
+    setCentralWidget(m_splitter);
+
+    connect(m_sessionList, &QListWidget::itemDoubleClicked, this, &MainWindow::connectSelectedSession);
+    connect(m_sessionList, &QListWidget::customContextMenuRequested, this, &MainWindow::showSessionMenu);
+
+    reloadSessions();
 
     m_statusLabel = new QLabel(this);
     statusBar()->addPermanentWidget(m_statusLabel);
@@ -243,6 +277,60 @@ void MainWindow::buildActions()
     toolbar->addAction(m_pasteAction);
 }
 
+void MainWindow::reloadSessions()
+{
+    if (!m_sessionList)
+        return;
+
+    m_sessionList->clear();
+    m_sessions = SessionStore::load();
+    for (const SessionSpec &spec : m_sessions) {
+        auto *item = new QListWidgetItem(spec.displayName(), m_sessionList);
+        item->setToolTip(spec.summary());
+    }
+    if (m_sessions.isEmpty()) {
+        auto *placeholder = new QListWidgetItem(tr("还没有保存的会话"), m_sessionList);
+        placeholder->setFlags(Qt::NoItemFlags);
+        placeholder->setForeground(palette().color(QPalette::Disabled, QPalette::WindowText));
+        placeholder->setToolTip(tr("新建会话时勾选“连接后保存到会话列表”"));
+    }
+}
+
+void MainWindow::connectSelectedSession()
+{
+    const int row = m_sessionList->currentRow();
+    if (row < 0 || row >= m_sessions.size())
+        return;
+    openSession(m_sessions.at(row));
+}
+
+void MainWindow::showSessionMenu(const QPoint &pos)
+{
+    QListWidgetItem *item = m_sessionList->itemAt(pos);
+    if (!item || !(item->flags() & Qt::ItemIsSelectable))
+        return;
+
+    QMenu menu(this);
+    QAction *connectAction = menu.addAction(tr("连接"));
+    QAction *deleteAction = menu.addAction(tr("删除会话"));
+    QAction *chosen = menu.exec(m_sessionList->viewport()->mapToGlobal(pos));
+    if (!chosen)
+        return;
+
+    const int row = m_sessionList->row(item);
+    if (row < 0 || row >= m_sessions.size())
+        return;
+
+    if (chosen == connectAction) {
+        m_sessionList->setCurrentRow(row);
+        connectSelectedSession();
+    } else if (chosen == deleteAction) {
+        const SessionSpec &spec = m_sessions.at(row);
+        SessionStore::removeByName(spec.name.isEmpty() ? spec.displayName() : spec.name);
+        reloadSessions();
+    }
+}
+
 TerminalWidget *MainWindow::currentTerminal() const
 {
     return qobject_cast<TerminalWidget *>(m_tabs->currentWidget());
@@ -259,8 +347,10 @@ void MainWindow::newSshSession()
     dialog.setType(SessionSpec::Ssh);
     if (dialog.exec() != QDialog::Accepted)
         return;
-    if (dialog.shouldSave())
+    if (dialog.shouldSave()) {
         SessionStore::upsert(dialog.spec());
+        reloadSessions();
+    }
     openSession(dialog.spec());
 }
 
@@ -270,8 +360,10 @@ void MainWindow::newTelnetSession()
     dialog.setType(SessionSpec::Telnet);
     if (dialog.exec() != QDialog::Accepted)
         return;
-    if (dialog.shouldSave())
+    if (dialog.shouldSave()) {
         SessionStore::upsert(dialog.spec());
+        reloadSessions();
+    }
     openSession(dialog.spec());
 }
 
@@ -281,8 +373,10 @@ void MainWindow::newSerialSession()
     dialog.setType(SessionSpec::Serial);
     if (dialog.exec() != QDialog::Accepted)
         return;
-    if (dialog.shouldSave())
+    if (dialog.shouldSave()) {
         SessionStore::upsert(dialog.spec());
+        reloadSessions();
+    }
     openSession(dialog.spec());
 }
 
@@ -436,6 +530,7 @@ void MainWindow::closeEvent(QCloseEvent *event)
 {
     QSettings settings;
     settings.setValue(QStringLiteral("window/geometry"), saveGeometry());
+    settings.setValue(QStringLiteral("window/splitter"), m_splitter->saveState());
     event->accept();
 }
 

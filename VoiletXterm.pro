@@ -22,6 +22,10 @@ QMAKE_TARGET_COPYRIGHT = MIT
 
 CONFIG += c++17 warn_on
 
+# MSVC otherwise reads sources in the system code page and every Chinese
+# string literal (window titles, menus) turns into mojibake.
+msvc: QMAKE_CXXFLAGS += /utf-8
+
 DEFINES += QT_DEPRECATED_WARNINGS
 
 INCLUDEPATH += src

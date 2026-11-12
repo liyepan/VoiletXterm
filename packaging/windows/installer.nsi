@@ -1,4 +1,4 @@
-; VoiletXterm NSIS installer
+﻿; VoiletXterm NSIS installer
 ; Called with: /DAPP_VERSION=... /DDEPLOY_DIR=... /DICON_FILE=... /DOUTPUT_FILE=...
 Unicode true
 !include "MUI2.nsh"

@@ -129,7 +129,8 @@ void SessionDialog::buildUi()
     auto *serialForm = new QFormLayout(serialPage);
     auto *portRow = new QHBoxLayout;
     m_serialPortCombo = new QComboBox(serialPage);
-    m_serialPortCombo->setEditable(true);
+    m_serialPortCombo->setEditable(false); // pick from the list, never type a path
+    m_serialPortCombo->setMinimumWidth(260);
     auto *refresh = new QPushButton(tr("刷新"), serialPage);
     portRow->addWidget(m_serialPortCombo, 1);
     portRow->addWidget(refresh);
@@ -197,33 +198,39 @@ void SessionDialog::buildUi()
     });
     connect(browse, &QPushButton::clicked, this, &SessionDialog::onBrowseKey);
     connect(refresh, &QPushButton::clicked, this, &SessionDialog::onRefreshPorts);
+    connect(m_tabs, &QTabWidget::currentChanged, this, [this](int index) {
+        if (index == 2)
+            onRefreshPorts();
+    });
 
     onRefreshPorts();
 }
 
 void SessionDialog::onRefreshPorts()
 {
-    const QString current = m_serialPortCombo->currentText();
+    const QString current = m_serialPortCombo->currentData().toString();
     m_serialPortCombo->clear();
+
     const auto ports = QSerialPortInfo::availablePorts();
     for (const QSerialPortInfo &info : ports) {
         QString label = info.systemLocation();
-        if (!info.description().isEmpty())
-            label += QStringLiteral(" - %1").arg(info.description());
+        const QString description = info.description().isEmpty() ? info.portName() : info.description();
+        if (!description.isEmpty())
+            label += QStringLiteral(" — %1").arg(description);
         m_serialPortCombo->addItem(label, info.systemLocation());
     }
-    if (m_serialPortCombo->count() == 0)
-        m_serialPortCombo->addItem(QStringLiteral("/dev/ttyUSB0"), QStringLiteral("/dev/ttyUSB0"));
-    if (!current.isEmpty())
-        m_serialPortCombo->setCurrentText(current);
-    syncPortDisplay();
-}
 
-void SessionDialog::syncPortDisplay()
-{
-    m_serialPortCombo->setEditText(m_serialPortCombo->currentData().toString().isEmpty()
-                                       ? m_serialPortCombo->currentText()
-                                       : m_serialPortCombo->currentData().toString());
+    if (m_serialPortCombo->count() == 0) {
+        m_serialPortCombo->addItem(tr("（未检测到串口设备）"), QString());
+        m_serialPortCombo->setEnabled(false);
+    } else {
+        m_serialPortCombo->setEnabled(true);
+        // keep a saved port that is not plugged in right now
+        if (!current.isEmpty() && m_serialPortCombo->findData(current) < 0)
+            m_serialPortCombo->addItem(current, current);
+        const int index = current.isEmpty() ? 0 : m_serialPortCombo->findData(current);
+        m_serialPortCombo->setCurrentIndex(index < 0 ? 0 : index);
+    }
 }
 
 void SessionDialog::onBrowseKey()
@@ -282,7 +289,11 @@ void SessionDialog::loadSpecIntoForm(const SessionSpec &spec)
         break;
     case SessionSpec::Serial:
         m_tabs->setCurrentIndex(2);
-        m_serialPortCombo->setEditText(spec.serialPort);
+        if (!spec.serialPort.isEmpty() && m_serialPortCombo->findData(spec.serialPort) < 0)
+            m_serialPortCombo->addItem(spec.serialPort, spec.serialPort);
+        const int serialIndex = m_serialPortCombo->findData(spec.serialPort);
+        if (serialIndex >= 0)
+            m_serialPortCombo->setCurrentIndex(serialIndex);
         m_baudCombo->setCurrentText(QString::number(spec.baudRate));
         m_dataBitsCombo->setCurrentText(QString::number(spec.dataBits));
         m_stopBitsCombo->setCurrentText(QString::number(spec.stopBits));
@@ -327,8 +338,7 @@ void SessionDialog::applyPageToSpec()
         m_spec.port = m_telnetPortSpin->value();
     } else {
         m_spec.type = SessionSpec::Serial;
-        const QString data = m_serialPortCombo->currentData().toString();
-        m_spec.serialPort = data.isEmpty() ? m_serialPortCombo->currentText().trimmed() : data;
+        m_spec.serialPort = m_serialPortCombo->currentData().toString();
         m_spec.baudRate = m_baudCombo->currentText().toInt();
         m_spec.dataBits = m_dataBitsCombo->currentText().toInt();
         m_spec.stopBits = m_stopBitsCombo->currentData().toInt();

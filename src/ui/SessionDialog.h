@@ -40,7 +40,6 @@ private:
     void reloadSessions();
     void loadSpecIntoForm(const SessionSpec &spec);
     void applyPageToSpec();
-    void syncPortDisplay();
 
     SessionSpec m_spec;
 

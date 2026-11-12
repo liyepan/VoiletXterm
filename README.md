@@ -25,6 +25,7 @@ MobaXterm 很好用，但只跑 Windows、源码闭源。VoiletXterm 只做三�
 | 串口 | QSerialPort | 波特率 / 数据位 / 校验 / 停止位 / 流控 / 本地回显 |
 
 **界面**
+- 左侧固定会话栏（宽度可拖动并记住），双击已保存的会话即可连接
 - 多标签会话，标签标题跟随远端 `OSC 0/2` 标题
 - 会话保存与复用（QSettings 持久化），新建/编辑/删除
 - 命令行直达：`voiletxterm user@host:22` / `telnet://host:port` / `serial:/dev/ttyUSB0@115200`
