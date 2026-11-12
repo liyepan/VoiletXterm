@@ -54,6 +54,11 @@ bool parseTarget(const QString &target, vx::SessionSpec &spec)
     }
     if (spec.host.isEmpty() && spec.serialPort.isEmpty())
         return false;
+    // Guard against ssh askpass style arguments reaching this code.
+    if (spec.host.contains(QLatin1Char(' ')) || spec.host.contains(QLatin1Char('\''))
+        || spec.host.contains(QLatin1Char('"')) || spec.serialPort.contains(QLatin1Char(' '))) {
+        return false;
+    }
     spec.name = spec.displayName();
     return true;
 }
@@ -62,12 +67,15 @@ bool parseTarget(const QString &target, vx::SessionSpec &spec)
 
 int main(int argc, char *argv[])
 {
-    // ssh calls "voiletxterm --askpass <prompt>" when a password is saved.
-    for (int i = 1; i < argc; ++i) {
-        if (qstrcmp(argv[i], "--askpass") == 0) {
-            const QByteArray secret = qgetenv("VOILET_ASKPASS_PASSWORD");
-            if (secret.isEmpty())
-                return 1;
+    // ssh runs $SSH_ASKPASS with the prompt as its only argument, e.g.
+    //   voiletxterm "192.168.55.128's password: "
+    // The password itself travels in the environment. Without this check the
+    // GUI would start and treat the prompt as a host name.
+    {
+        const QByteArray secret = qgetenv("VOILET_ASKPASS_PASSWORD");
+        const bool explicitAskpass = (argc > 1 && qstrcmp(argv[1], "--askpass") == 0);
+        const bool promptArgument = (argc == 2);
+        if (!secret.isEmpty() && (explicitAskpass || promptArgument)) {
             fwrite(secret.constData(), 1, size_t(secret.size()), stdout);
             fputc('\n', stdout);
             fflush(stdout);
