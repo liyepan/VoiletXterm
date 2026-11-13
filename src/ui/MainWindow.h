@@ -2,6 +2,7 @@
 
 #include "../session/SessionSpec.h"
 
+#include <QHash>
 #include <QMainWindow>
 #include <QVector>
 
@@ -46,12 +47,15 @@ private:
     void buildActions();
     QWidget *buildWelcomePage();
     void openSession(const SessionSpec &spec);
+    void wireSession(TerminalWidget *widget, const SessionSpec &spec);
+    void reconnectSession(TerminalWidget *widget);
     TerminalWidget *currentTerminal() const;
     void updateStatus();
 
     QSplitter *m_splitter = nullptr;
     QListWidget *m_sessionList = nullptr;
     QVector<SessionSpec> m_sessions;
+    QHash<TerminalWidget *, SessionSpec> m_specs;
     QStackedWidget *m_stack = nullptr;
     QWidget *m_welcome = nullptr;
     QTabWidget *m_tabs = nullptr;

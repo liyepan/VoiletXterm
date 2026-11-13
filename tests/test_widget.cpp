@@ -3,6 +3,7 @@
 #include <QApplication>
 #include <QDir>
 #include <QImage>
+#include <QSignalSpy>
 #include <QScrollBar>
 #include <QtTest/QTest>
 #include <cstdio>
@@ -280,6 +281,19 @@ int main(int argc, char *argv[])
         CHECK(qApp->palette().color(QPalette::Window).lightness() > 180);
         CHECK(!qApp->styleSheet().contains(QLatin1Char('@')));
         CHECK(qApp->styleSheet().contains(QStringLiteral("#FFFFFF")));
+    }
+
+    // --- "r" reconnects a session that has no transport any more ---
+    {
+        TerminalWidget probe;
+        QSignalSpy reconnectSpy(&probe, &TerminalWidget::reconnectRequested);
+        QKeyEvent press(QEvent::KeyPress, Qt::Key_R, Qt::NoModifier, QStringLiteral("r"));
+        QApplication::sendEvent(&probe, &press);
+        CHECK(reconnectSpy.count() == 1);
+
+        QKeyEvent control(QEvent::KeyPress, Qt::Key_R, Qt::ControlModifier, QStringLiteral("\r"));
+        QApplication::sendEvent(&probe, &control);
+        CHECK(reconnectSpy.count() == 1);
     }
 
     // --- the credential store round-trips a secret ---

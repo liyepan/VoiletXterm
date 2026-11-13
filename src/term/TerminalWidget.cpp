@@ -941,6 +941,14 @@ void TerminalWidget::keyPressEvent(QKeyEvent *event)
     const bool shift = mods.testFlag(Qt::ShiftModifier);
     const bool alt = mods.testFlag(Qt::AltModifier);
 
+    // A finished session has no transport; "r" reconnects instead of sending
+    // the key into the void.
+    if (!m_transport && event->key() == Qt::Key_R && !ctrl && !alt
+        && !mods.testFlag(Qt::MetaModifier)) {
+        emit reconnectRequested();
+        return;
+    }
+
     if (ctrl && shift) {
         switch (event->key()) {
         case Qt::Key_C:

@@ -411,8 +411,20 @@ void MainWindow::openSession(const SessionSpec &spec)
         return;
     }
 
+    wireSession(widget, resolved);
+
+    widget->setTransport(transport);
+    widget->setFocus();
+    updateStatus();
+}
+
+void MainWindow::wireSession(TerminalWidget *widget, const SessionSpec &spec)
+{
+    m_specs.insert(widget, spec);
+
     connect(widget, &TerminalWidget::sessionFinished, this, [this, widget](const QString &reason) {
-        widget->parser()->feed(QStringLiteral("\r\n\033[38;5;203m[会话已结束: %1]\033[0m\r\n")
+        widget->parser()->feed(QStringLiteral("\r\n\033[38;5;203m[会话已结束: %1]\033[0m\r\n"
+                                             "\033[38;5;245m[按 r 重连]\033[0m\r\n")
                                    .arg(reason)
                                    .toUtf8());
         widget->viewport()->update();
@@ -427,6 +439,9 @@ void MainWindow::openSession(const SessionSpec &spec)
         widget->releaseTransport();
         m_statusLabel->setText(reason);
     });
+    connect(widget, &TerminalWidget::reconnectRequested, this, [this, widget] {
+        reconnectSession(widget);
+    });
     connect(widget, &TerminalWidget::bell, this, [] { QApplication::beep(); });
     connect(widget, &TerminalWidget::titleChanged, this, [this, widget](const QString &title) {
         if (title.isEmpty())
@@ -438,6 +453,33 @@ void MainWindow::openSession(const SessionSpec &spec)
         if (tabIndex == m_tabs->currentIndex())
             updateStatus();
     });
+    connect(widget, &QObject::destroyed, this, [this, widget] { m_specs.remove(widget); });
+}
+
+void MainWindow::reconnectSession(TerminalWidget *widget)
+{
+    const auto it = m_specs.constFind(widget);
+    if (it == m_specs.constEnd())
+        return;
+
+    const int tabIndex = m_tabs->indexOf(widget);
+    if (tabIndex >= 0) {
+        QString title = m_tabs->tabText(tabIndex);
+        title.remove(tr(" (已断开)"));
+        m_tabs->setTabText(tabIndex, title);
+    }
+
+    widget->clearSelection();
+    widget->parser()->feed(QStringLiteral("\r\n\033[38;5;114m[正在重连…]\033[0m\r\n").toUtf8());
+
+    // The old transport released itself when it finished; a fresh one picks up
+    // the same session spec, including the saved password.
+    Transport *transport = createTransport(it.value(), widget);
+    if (!transport) {
+        widget->parser()->feed(QStringLiteral("\033[38;5;203m[重连失败]\033[0m\r\n").toUtf8());
+        widget->viewport()->update();
+        return;
+    }
 
     widget->setTransport(transport);
     widget->setFocus();

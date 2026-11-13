@@ -49,6 +49,8 @@ signals:
     void workingDirectoryChanged(const QString &dir);
     void bell();
     void sessionFinished(const QString &reason);
+    // "r" was pressed while no transport is attached (the session ended).
+    void reconnectRequested();
     void userActivity();
 
 public slots:
