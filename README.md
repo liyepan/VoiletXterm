@@ -155,7 +155,7 @@ make install INSTALL_ROOT="$PWD/stage"
 cd .. && ./packaging/build-deb.sh build/stage 0.1.0 amd64 dist
 ```
 
-CI 在 `.github/workflows/package.yml`：推 `main` 或打 `v*` tag 时四个平台并行构建，最后汇总挂到 GitHub Release（附 `SHA256SUMS`）。GitHub 之外（比如 Gitea）会自动跳过所有 job。
+CI 在 `.github/workflows/package.yml`：推 `main` 或打 `v*` tag 时四个平台并行构建，最后汇总挂到 GitHub Release（附 `SHA256SUMS`）。CI 只在 GitHub 上跑 —— Gitea 那边只做源码仓库和 push mirror，没有 Actions。
 
 > **推 main 和打 tag 都会发布**。但要注意 tag 的来源：Gitea 的 push mirror 是 `--mirror` 强推，会 prune 掉"只在 GitHub 存在"的 tag，而 GitHub 的规则是 **tag 没了，Release 就被打回草稿**。
 >
