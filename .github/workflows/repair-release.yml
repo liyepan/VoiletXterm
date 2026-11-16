@@ -1,0 +1,87 @@
+name: 修复 Release 草稿
+
+# 现象：Release 发布后过一阵自己变回草稿。
+# 原因：Gitea 的 push mirror 用 --mirror 强推，会把 GitHub 上「Gitea 没有」的
+# tag 剪掉；而 GitHub 的规则是 Release 关联的 tag 一旦消失，Release 就打回草稿。
+# 我们的 tag 是 CI 在 GitHub 上现造的，Gitea 里没有，所以每次镜像同步都剪一次。
+#
+# 这个工作流每 15 分钟兜一次：
+#   1. 有 GITEA_TOKEN → 把 tag 推回 Gitea，之后镜像就不会再剪（根治）
+#   2. 没 token      → 重建被剪掉的 tag 并把草稿重新发布（治标，但 Release 一直可用）
+on:
+  schedule:
+    - cron: "*/15 * * * *"
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+concurrency:
+  group: repair-release
+  cancel-in-progress: false
+
+jobs:
+  repair:
+    name: 恢复草稿
+    if: ${{ github.server_url == 'https://github.com' }}
+    runs-on: ubuntu-24.04
+    timeout-minutes: 5
+    steps:
+      - name: 检出代码
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: 重新发布
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          GITEA_TOKEN: ${{ secrets.GITEA_TOKEN }}
+        run: |
+          set -uo pipefail
+
+          gh release list --limit 50 --json tagName,isDraft \
+            --jq '.[] | select(.isDraft) | .tagName' > /tmp/drafts.txt || true
+          if [ ! -s /tmp/drafts.txt ]; then
+            echo "没有草稿 Release"
+            exit 0
+          fi
+
+          failed=0
+          while IFS= read -r tag; do
+            [ -z "$tag" ] && continue
+            echo "== $tag"
+
+            # tag 被剪掉了就先重建，否则 Release 无法正式发布
+            if ! git rev-parse "refs/tags/$tag" >/dev/null 2>&1; then
+              target=$(gh release view "$tag" --json targetCommitish --jq .targetCommitish 2>/dev/null || true)
+              if [ -z "$target" ]; then
+                echo "::warning::$tag 找不到目标提交，跳过"
+                failed=1
+                continue
+              fi
+              git tag "$tag" "$target" 2>/dev/null || true
+              git push origin "refs/tags/$tag" || echo "::warning::重建 tag $tag 失败"
+            fi
+
+            # 有 token 就顺手推回 Gitea：镜像下次同步就不会再剪这个 tag
+            if [ -n "${GITEA_TOKEN:-}" ]; then
+              gitea_url="https://oauth2:${GITEA_TOKEN}@git.linuxacme.com/liyepan/VoiletXterm.git"
+              if git push "$gitea_url" "refs/tags/$tag" 2>/dev/null; then
+                echo "   已把 $tag 推回 Gitea"
+              else
+                echo "::warning::推 $tag 到 Gitea 失败（token 权限够吗）"
+              fi
+            fi
+
+            if gh release edit "$tag" --draft=false --latest; then
+              echo "   已重新发布"
+            else
+              echo "::warning::发布 $tag 失败"
+              failed=1
+            fi
+          done < /tmp/drafts.txt
+
+          if [ "$failed" -ne 0 ]; then
+            echo "::error::有 Release 没能修复"
+            exit 1
+          fi

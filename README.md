@@ -164,6 +164,8 @@ CI 在 `.github/workflows/package.yml`：推 `main` 或打 `v*` tag 时四个平
 > git tag -a v0.1.1 -m "release 0.1.1" && git push origin v0.1.1
 > ```
 > 要么配一个 `GITEA_TOKEN` secret，让工作流把自动生成的 tag 推回 Gitea。两者都不做的话，草稿问题会回来。
+>
+> 两者都没做时，`.github/workflows/repair-release.yml` 每 15 分钟兜底：重建被剪掉的 tag、把草稿重新发布，并在配了 `GITEA_TOKEN` 时顺手把 tag 推回 Gitea（推回去之后就不会再被剪）。
 
 ## 已知限制
 
